@@ -9,8 +9,9 @@ import {
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
+  PointerSensor,
   useSensor,
   useSensors,
   closestCenter,
@@ -90,7 +91,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ task, category, onEdit, o
       ref={setNodeRef}
       style={{
         ...style,
-        touchAction: isDragging ? 'none' : 'auto'
+        touchAction: isDragging ? 'none' : 'manipulation'
       }}
       {...attributes}
       {...listeners}
@@ -103,7 +104,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ task, category, onEdit, o
         group bg-white dark:bg-gray-800 rounded-lg mb-1 shadow-sm border border-gray-200 dark:border-gray-700
         cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 text-xs
         ${isDragging ? 'opacity-50 rotate-1 scale-105' : ''}
-        relative overflow-hidden
+        relative overflow-hidden touch-manipulation
       `}
     >
       {/* Striscetta colorata a sinistra */}
@@ -203,6 +204,24 @@ export const Planner: React.FC = () => {
     monday.setDate(today.getDate() - today.getDay() + 1);
     return monday;
   });
+
+  // Aggiunge CSS per migliorare il touch handling
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .dnd-touch-fix * {
+        touch-action: none !important;
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
   
   const [categories, setCategories] = useState<PlannerCategory[]>([]);
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
@@ -219,13 +238,13 @@ export const Planner: React.FC = () => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 10,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 250,
-        tolerance: 8,
+        delay: 0,
+        tolerance: 30,
       },
     })
   );
@@ -360,6 +379,9 @@ export const Planner: React.FC = () => {
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(Number(event.active.id));
     
+    // Aggiungi classe per bloccare il touch su tutto il documento durante il drag
+    document.body.classList.add('dnd-touch-fix');
+    
     // Feedback aptico su mobile (vibrazione se supportata)
     if ('vibrate' in navigator && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
       navigator.vibrate(50);
@@ -473,6 +495,9 @@ export const Planner: React.FC = () => {
     }
 
     setActiveId(null);
+    
+    // Rimuovi classe di blocco touch
+    document.body.classList.remove('dnd-touch-fix');
   };
 
   // Gestione task

@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
-import { useThemeStore } from './store/themeStore';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Login } from './pages/Login';
@@ -17,7 +16,6 @@ import { Planner } from './pages/Planner';
 
 function App() {
   const { initialize } = useAuthStore();
-  const { isDark } = useThemeStore();
 
   useEffect(() => {
     initialize();
@@ -77,30 +75,30 @@ function App() {
           toastOptions={{
             duration: 4000,
             style: {
-              background: isDark ? '#374151' : '#fff',
-              color: isDark ? '#f9fafb' : '#1f2937',
-              border: isDark ? '1px solid #4b5563' : '1px solid #e5e7eb',
+              background: '#fff',
+              color: '#1f2937',
+              border: '1px solid #e5e7eb',
             },
             success: {
               style: {
-                background: isDark ? '#065f46' : '#dcfce7',
-                color: isDark ? '#d1fae5' : '#166534',
-                border: isDark ? '1px solid #047857' : '1px solid #bbf7d0',
+                background: '#dcfce7',
+                color: '#166534',
+                border: '1px solid #bbf7d0',
               },
               iconTheme: {
                 primary: '#10b981',
-                secondary: isDark ? '#065f46' : '#dcfce7',
+                secondary: '#dcfce7',
               },
             },
             error: {
               style: {
-                background: isDark ? '#7f1d1d' : '#fef2f2',
-                color: isDark ? '#fecaca' : '#991b1b',
-                border: isDark ? '1px solid #dc2626' : '1px solid #fca5a5',
+                background: '#fef2f2',
+                color: '#991b1b',
+                border: '1px solid #fca5a5',
               },
               iconTheme: {
                 primary: '#ef4444',
-                secondary: isDark ? '#7f1d1d' : '#fef2f2',
+                secondary: '#fef2f2',
               },
             },
           }}

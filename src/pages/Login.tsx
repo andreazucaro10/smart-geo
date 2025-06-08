@@ -89,7 +89,7 @@ export const Login: React.FC = () => {
                   type="email"
                   autoComplete="email"
                   className={clsx(
-                    'input pl-10',
+                    'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 pl-10 text-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
                     errors.email && 'border-red-500 focus-visible:ring-red-500'
                   )}
                   placeholder="Inserisci la tua email"
@@ -114,7 +114,7 @@ export const Login: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   className={clsx(
-                    'input pl-10 pr-10',
+                    'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 pl-10 pr-10 text-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
                     errors.password && 'border-red-500 focus-visible:ring-red-500'
                   )}
                   placeholder="Inserisci la tua password"
@@ -156,7 +156,7 @@ export const Login: React.FC = () => {
               type="submit"
               disabled={isSubmitting}
               className={clsx(
-                'btn btn-primary w-full',
+                'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 w-full',
                 isSubmitting && 'opacity-50 cursor-not-allowed'
               )}
             >
