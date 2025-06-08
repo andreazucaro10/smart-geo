@@ -5,7 +5,7 @@ import type { AuthUser, AuthState } from '../types';
 import toast from 'react-hot-toast';
 
 interface AuthStore extends AuthState {
-  signIn: (email: string, password: string) => Promise<boolean>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
   signOut: () => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
@@ -29,6 +29,15 @@ export const useAuthStore = create<AuthStore>()(
       initialize: async () => {
         try {
           set({ loading: true });
+          
+          // Controlla se l'utente aveva selezionato "ricordami"
+          const rememberMe = localStorage.getItem('smart-geo-remember-me');
+          if (!rememberMe) {
+            // Se non aveva selezionato "ricordami", cancella i dati persistiti
+            localStorage.removeItem('smart-geo-auth');
+            set({ user: null, loading: false });
+            return;
+          }
           
           const { data: { session }, error } = await supabase.auth.getSession();
           
@@ -117,7 +126,7 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
-      signIn: async (email, password) => {
+      signIn: async (email, password, rememberMe = false) => {
         try {
           set({ loading: true, error: null });
 
@@ -125,6 +134,13 @@ export const useAuthStore = create<AuthStore>()(
             email,
             password
           });
+
+          // Salva la preferenza "ricordami" nel localStorage
+          if (rememberMe) {
+            localStorage.setItem('smart-geo-remember-me', 'true');
+          } else {
+            localStorage.removeItem('smart-geo-remember-me');
+          }
 
           if (error) {
             set({ error: error.message, loading: false });
@@ -216,6 +232,14 @@ export const useAuthStore = create<AuthStore>()(
             toast.error('Errore durante il logout');
           } else {
             set({ user: null });
+            
+            // Rimuovi i dati persistiti se l'utente non aveva selezionato "ricordami"
+            const rememberMe = localStorage.getItem('smart-geo-remember-me');
+            if (!rememberMe) {
+              localStorage.removeItem('smart-geo-auth');
+            }
+            localStorage.removeItem('smart-geo-remember-me');
+            
             toast.success('Logout effettuato con successo!');
           }
         } catch (error) {

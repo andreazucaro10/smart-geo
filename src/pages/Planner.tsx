@@ -83,16 +83,7 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ task, category, onEdit, o
     transition,
   };
 
-  // Gestione touch per prevenire lo scroll
-  const handleTouchStart = (e: React.TouchEvent) => {
-    // Previeni il comportamento di default solo durante il touch
-    (e.currentTarget as HTMLElement).style.touchAction = 'none';
-  };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    // Ripristina il touch action
-    (e.currentTarget as HTMLElement).style.touchAction = 'auto';
-  };
 
   return (
     <div
@@ -107,13 +98,12 @@ const DraggableTask: React.FC<DraggableTaskProps> = ({ task, category, onEdit, o
         e.stopPropagation();
         onEdit(task);
       }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+
       className={`
         group bg-white dark:bg-gray-800 rounded-lg mb-1 shadow-sm border border-gray-200 dark:border-gray-700
         cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 text-xs
         ${isDragging ? 'opacity-50 rotate-1 scale-105' : ''}
-        relative overflow-hidden select-none
+        relative overflow-hidden
       `}
     >
       {/* Striscetta colorata a sinistra */}
@@ -163,7 +153,7 @@ const GridCell: React.FC<GridCellProps> = ({ category, day, tasks, onEdit, onDel
       ref={setNodeRef}
       className={`
         group min-h-[120px] p-2 border border-gray-200 dark:border-gray-700 transition-all duration-200
-        bg-white dark:bg-gray-800 relative touch-manipulation
+        bg-white dark:bg-gray-800 relative
         ${isOver ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600' : ''}
       `}
     >
@@ -234,8 +224,8 @@ export const Planner: React.FC = () => {
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 300,
-        tolerance: 5,
+        delay: 250,
+        tolerance: 8,
       },
     })
   );
@@ -370,10 +360,6 @@ export const Planner: React.FC = () => {
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(Number(event.active.id));
     
-    // Previeni lo scroll della pagina durante il drag su mobile
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-    
     // Feedback aptico su mobile (vibrazione se supportata)
     if ('vibrate' in navigator && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
       navigator.vibrate(50);
@@ -486,10 +472,6 @@ export const Planner: React.FC = () => {
       }
     }
 
-    // Ripristina lo scroll della pagina
-    document.body.style.overflow = 'auto';
-    document.body.style.touchAction = 'auto';
-    
     setActiveId(null);
   };
 
@@ -695,7 +677,7 @@ export const Planner: React.FC = () => {
             onDragEnd={handleDragEnd}
           >
             {/* Griglia planner */}
-            <div className="overflow-x-auto" style={{ touchAction: 'pan-x pan-y' }}>
+            <div className="overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Header giorni */}
                 <div className="grid grid-cols-8 gap-0">

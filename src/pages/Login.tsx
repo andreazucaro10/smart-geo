@@ -9,7 +9,8 @@ import { clsx } from 'clsx';
 
 const loginSchema = z.object({
   email: z.string().email('Inserisci un email valida'),
-  password: z.string().min(6, 'La password deve avere almeno 6 caratteri')
+  password: z.string().min(6, 'La password deve avere almeno 6 caratteri'),
+  rememberMe: z.boolean().optional()
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -38,7 +39,7 @@ export const Login: React.FC = () => {
   }, [user, loading, navigate, from]);
 
   const onSubmit = async (data: LoginFormData) => {
-    const success = await signIn(data.email, data.password);
+    const success = await signIn(data.email, data.password, data.rememberMe);
     if (success) {
       navigate(from, { replace: true });
     }
@@ -133,6 +134,19 @@ export const Login: React.FC = () => {
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
               )}
+            </div>
+
+            {/* Remember Me */}
+            <div className="flex items-center">
+              <input
+                {...register('rememberMe')}
+                id="rememberMe"
+                type="checkbox"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
+                Ricordami
+              </label>
             </div>
           </div>
 
