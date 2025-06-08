@@ -13,9 +13,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCenter,
   pointerWithin,
-  rectIntersection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
