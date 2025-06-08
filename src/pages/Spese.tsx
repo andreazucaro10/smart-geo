@@ -13,6 +13,7 @@ export const Spese: React.FC = () => {
   const [dataDa, setDataDa] = useState('');
   const [dataA, setDataA] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingSpesa, setEditingSpesa] = useState<Scadenza | null>(null);
   const [formData, setFormData] = useState({
     descrizione: '',
     spese: '',
@@ -73,17 +74,16 @@ export const Spese: React.FC = () => {
     if (user?.id) {
       fetchSpese();
     }
-  }, [user?.id]);
+  }, [user?.id, searchTerm, soloNonPagate, dataDa, dataA]);
 
-  const handleSearch = () => {
-    fetchSpese();
-  };
+
 
   const handleClearSearch = () => {
     setSearchTerm('');
     setSoloNonPagate(false);
     setDataDa('');
     setDataA('');
+    fetchSpese();
   };
 
   const handleDeleteSpesa = async (id: number) => {
@@ -119,6 +119,45 @@ export const Spese: React.FC = () => {
     }));
   };
 
+  const handleEditSpesa = (spesa: Scadenza) => {
+    setEditingSpesa(spesa);
+    setFormData({
+      descrizione: spesa.descrizione,
+      spese: spesa.spese.toString(),
+      data_scadenza: spesa.data_scadenza || '',
+      pagamento: spesa.pagamento,
+      data_pagamento: spesa.data_pagamento || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleTogglePagamento = async (spesa: Scadenza) => {
+    try {
+      const nuovoPagamento = !spesa.pagamento;
+      const dataOggi = new Date().toISOString().split('T')[0];
+      
+      const { error } = await supabase
+        .from('scadenze')
+        .update({
+          pagamento: nuovoPagamento,
+          data_pagamento: nuovoPagamento ? dataOggi : null
+        })
+        .eq('id', spesa.id)
+        .eq('user_id', user?.id);
+
+      if (error) {
+        toast.error('Errore nell\'aggiornamento del pagamento');
+        return;
+      }
+
+      toast.success(nuovoPagamento ? 'Pagamento registrato' : 'Pagamento rimosso');
+      fetchSpese();
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nell\'operazione');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       descrizione: '',
@@ -127,6 +166,7 @@ export const Spese: React.FC = () => {
       pagamento: false,
       data_pagamento: ''
     });
+    setEditingSpesa(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,17 +192,36 @@ export const Spese: React.FC = () => {
         data_pagamento: formData.pagamento && formData.data_pagamento ? formData.data_pagamento : null
       };
 
-      const { error } = await supabase
-        .from('scadenze')
-        .insert([spesaData]);
+      if (editingSpesa) {
+        // Modifica spesa esistente
+        const { error } = await supabase
+          .from('scadenze')
+          .update(spesaData)
+          .eq('id', editingSpesa.id)
+          .eq('user_id', user?.id);
 
-      if (error) {
-        console.error('Errore nella creazione:', error);
-        toast.error('Errore nella creazione della scadenza');
-        return;
+        if (error) {
+          console.error('Errore nella modifica:', error);
+          toast.error('Errore nella modifica della scadenza');
+          return;
+        }
+
+        toast.success('Scadenza modificata con successo');
+      } else {
+        // Crea nuova spesa
+        const { error } = await supabase
+          .from('scadenze')
+          .insert([spesaData]);
+
+        if (error) {
+          console.error('Errore nella creazione:', error);
+          toast.error('Errore nella creazione della scadenza');
+          return;
+        }
+
+        toast.success('Scadenza creata con successo');
       }
 
-      toast.success('Scadenza creata con successo');
       setShowModal(false);
       resetForm();
       fetchSpese();
@@ -332,12 +391,6 @@ export const Spese: React.FC = () => {
           {/* Pulsanti */}
           <div className="flex gap-2">
             <button
-              onClick={handleSearch}
-              className="btn btn-primary flex items-center gap-2"
-            >
-              <Filter className="w-4 h-4" />
-            </button>
-            <button
               onClick={handleClearSearch}
               className="btn btn-outline flex items-center gap-2"
             >
@@ -354,6 +407,9 @@ export const Spese: React.FC = () => {
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Stato
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Descrizione
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -361,9 +417,6 @@ export const Spese: React.FC = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Data Scadenza
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Stato
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Pagamento
@@ -395,6 +448,11 @@ export const Spese: React.FC = () => {
               ) : (
                 spese.map((spesa) => (
                   <tr key={spesa.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatoClass(spesa.data_scadenza || null, spesa.data_pagamento || null)}`}>
+                        {getStatoText(spesa.data_scadenza || null, spesa.data_pagamento || null)}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {spesa.descrizione}
                     </td>
@@ -404,13 +462,21 @@ export const Spese: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {formatDate(spesa.data_scadenza || null)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatoClass(spesa.data_scadenza || null, spesa.data_pagamento || null)}`}>
-                        {getStatoText(spesa.data_scadenza || null, spesa.data_pagamento || null)}
-                      </span>
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {spesa.pagamento ? 'Sì' : 'No'}
+                      <button
+                        onClick={() => handleTogglePagamento(spesa)}
+                        className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                          spesa.pagamento
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                        title={spesa.pagamento ? 'Clicca per rimuovere pagamento' : 'Clicca per registrare pagamento'}
+                      >
+                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                          spesa.pagamento ? 'bg-green-500' : 'bg-gray-400'
+                        }`}></div>
+                        {spesa.pagamento ? 'Pagata' : 'Da pagare'}
+                      </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {formatDate(spesa.data_pagamento || null)}
@@ -418,7 +484,7 @@ export const Spese: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {/* TODO: Implementa modifica */}}
+                          onClick={() => handleEditSpesa(spesa)}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
                           title="Modifica"
                         >
@@ -441,13 +507,15 @@ export const Spese: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Nuova Scadenza */}
+      {/* Modal Nuova/Modifica Scadenza */}
       {showModal && (
         <div className="modal-overlay">
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Nuova Scadenza</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                {editingSpesa ? 'Modifica Scadenza' : 'Nuova Scadenza'}
+              </h2>
               <button
                 onClick={() => {
                   setShowModal(false);
@@ -574,10 +642,10 @@ export const Spese: React.FC = () => {
                   {submitting ? (
                     <div className="flex items-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Salvataggio...
+                      {editingSpesa ? 'Modifica...' : 'Salvataggio...'}
                     </div>
                   ) : (
-                    'Salva'
+                    editingSpesa ? 'Modifica' : 'Salva'
                   )}
                 </button>
               </div>

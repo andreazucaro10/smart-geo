@@ -22,6 +22,7 @@ export const ComuneCatastoPage: React.FC = () => {
   });
   const [showModal, setShowModal] = useState(false);
   const [editingPratica, setEditingPratica] = useState<ComuneCatasto | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     committente: '',
     stato: '',
@@ -38,6 +39,35 @@ export const ComuneCatastoPage: React.FC = () => {
     note: ''
   });
   const { user } = useAuthStore();
+
+  // Gestione shortcut CTRL+INVIO per salvare
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Verifica se il modale è aperto e se è stata premuta la combinazione CTRL+INVIO o CMD+INVIO
+      if (showModal && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Simula il submit del form se non è già in corso un submit
+        if (!submitting) {
+          const form = document.querySelector('form') as HTMLFormElement;
+          if (form) {
+            form.requestSubmit();
+          }
+        }
+      }
+    };
+
+    // Aggiunge l'event listener solo quando il modale è aperto
+    if (showModal) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showModal, submitting]);
 
   // Protezione contro errori delle estensioni del browser
   useEffect(() => {
@@ -178,12 +208,31 @@ export const ComuneCatastoPage: React.FC = () => {
   };
 
   const handleToggleField = async (pratica: ComuneCatasto, field: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
+    // Verifica se il campo può essere modificato
+    if (!isFlagAbilitatoInTabella(pratica, field)) {
+      toast.error(`Il campo ${field} non può essere modificato per questo tipo di incarico`);
+      return;
+    }
+
     try {
       const newValue = !pratica[field];
       
+      // Se stiamo disabilitando il comune, dobbiamo anche disabilitare fine_lavori
+      const updateData: any = { [field]: newValue };
+      if (field === 'comune' && !newValue) {
+        updateData.fine_lavori = false;
+      }
+
+      // Verifica se la pratica deve essere marcata come completata
+      const praticaAggiornata = { ...pratica, ...updateData };
+      const statoCompletata = await verificaEAggiornaStatoCompletata(praticaAggiornata);
+      if (statoCompletata) {
+        updateData.stato = statoCompletata;
+      }
+      
       const { error } = await supabase
         .from('comune_catasto')
-        .update({ [field]: newValue })
+        .update(updateData)
         .eq('id', pratica.id)
         .eq('user_id', user?.id);
 
@@ -192,11 +241,100 @@ export const ComuneCatastoPage: React.FC = () => {
         return;
       }
 
-      toast.success(`Campo ${field} aggiornato con successo`);
+      if (statoCompletata) {
+        const statoAggiornato = stati.find(s => s.id === statoCompletata);
+        if (statoAggiornato?.descrizione.toLowerCase().includes('completata')) {
+          toast.success(`Campo ${field} aggiornato e pratica marcata come completata!`);
+        } else if (statoAggiornato?.descrizione.toLowerCase().includes('corso')) {
+          toast.success(`Campo ${field} aggiornato e pratica riportata in corso`);
+        } else {
+          toast.success(`Campo ${field} aggiornato e stato cambiato in ${statoAggiornato?.descrizione}`);
+        }
+      } else {
+        toast.success(`Campo ${field} aggiornato con successo`);
+      }
       fetchData();
     } catch (error) {
       console.error('Errore:', error);
       toast.error('Errore nell\'aggiornamento');
+    }
+  };
+
+  // Funzione per verificare se la pratica deve essere marcata come completata o in corso
+  const verificaEAggiornaStatoCompletata = async (pratica: ComuneCatasto): Promise<number | null> => {
+    const tipoIncarico = pratica.tipo_incarico_info;
+    if (!tipoIncarico) return null;
+
+    // Trova gli stati "Completata" e "In corso" nella lista degli stati
+    const statoCompletata = stati.find(stato => 
+      stato.descrizione.toLowerCase().includes('completata') || 
+      stato.descrizione.toLowerCase().includes('completato')
+    );
+    
+    const statoInCorso = stati.find(stato => 
+      stato.descrizione.toLowerCase().includes('in corso') ||
+      stato.descrizione.toLowerCase().includes('corso') ||
+      stato.descrizione.toLowerCase().includes('lavorazione')
+    );
+    
+    if (!statoCompletata) {
+      console.warn('Stato "Completata" non trovato nella tabella stati_generali');
+      return null;
+    }
+
+    if (!statoInCorso) {
+      console.warn('Stato "In corso" non trovato nella tabella stati_generali');
+      return null;
+    }
+
+    // Verifica se tutti i flag richiesti sono a true
+    let tuttiIFlagCompletati = true;
+
+    // Controlla il flag comune se richiesto dal tipo di incarico
+    if (tipoIncarico.comune && !pratica.comune) {
+      tuttiIFlagCompletati = false;
+    }
+
+    // Controlla il flag catasto se richiesto dal tipo di incarico
+    if (tipoIncarico.catasto && !pratica.catasto) {
+      tuttiIFlagCompletati = false;
+    }
+
+    // Se il tipo di incarico prevede il comune, controlla anche fine_lavori
+    if (tipoIncarico.comune && !pratica.fine_lavori) {
+      tuttiIFlagCompletati = false;
+    }
+
+    // Se tutti i flag sono completati e lo stato non è già "Completata"
+    if (tuttiIFlagCompletati && pratica.stato !== statoCompletata.id) {
+      return statoCompletata.id;
+    }
+
+    // Se non tutti i flag sono completati e lo stato è "Completata", torna a "In corso"
+    if (!tuttiIFlagCompletati && pratica.stato === statoCompletata.id) {
+      return statoInCorso.id;
+    }
+
+    return null;
+  };
+
+  // Funzione per verificare se un flag è abilitato nella tabella
+  const isFlagAbilitatoInTabella = (pratica: ComuneCatasto, flagName: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
+    const tipoIncarico = pratica.tipo_incarico_info;
+    
+    switch (flagName) {
+      case 'comune':
+        return tipoIncarico?.comune === true;
+      case 'catasto':
+        return tipoIncarico?.catasto === true;
+      case 'fine_lavori':
+        // Fine lavori si abilita solo se il flag comune della pratica è true
+        return pratica.comune === true;
+      case 'pagamento':
+        // Il pagamento è sempre abilitato
+        return true;
+      default:
+        return false;
     }
   };
 
@@ -225,6 +363,24 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
+  // Funzione per formattare il numero di telefono
+  const formatTelefono = (value: string): string => {
+    // Rimuove tutti i caratteri non numerici
+    const numericValue = value.replace(/\D/g, '');
+    
+    // Limita a 10 cifre
+    const limitedValue = numericValue.slice(0, 10);
+    
+    // Applica la formattazione XXX XXX XXXX
+    if (limitedValue.length <= 3) {
+      return limitedValue;
+    } else if (limitedValue.length <= 6) {
+      return `${limitedValue.slice(0, 3)} ${limitedValue.slice(3)}`;
+    } else {
+      return `${limitedValue.slice(0, 3)} ${limitedValue.slice(3, 6)} ${limitedValue.slice(6)}`;
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     // Protezione contro eventi malformati da estensioni
     if (!e || !e.target) {
@@ -240,9 +396,16 @@ export const ComuneCatastoPage: React.FC = () => {
       return;
     }
 
+    let processedValue = value;
+    
+    // Formatta il telefono se è il campo telefono
+    if (name === 'telefono' && type !== 'checkbox') {
+      processedValue = formatTelefono(value);
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : processedValue
     }));
   };
 
@@ -254,6 +417,7 @@ export const ComuneCatastoPage: React.FC = () => {
       return;
     }
 
+    setSubmitting(true);
     try {
       const dataToSave = {
         ...formData,
@@ -261,6 +425,36 @@ export const ComuneCatastoPage: React.FC = () => {
         tipo_incarico: formData.tipo_incarico ? parseInt(formData.tipo_incarico) : null,
         user_id: user?.id
       };
+
+      // Verifica se la pratica deve essere marcata come completata
+      const tipoIncaricoSelezionato = getTipoIncaricoSelezionato();
+      if (tipoIncaricoSelezionato) {
+        const praticaSimulata = {
+          id: editingPratica?.id || 0,
+          committente: formData.committente,
+          stato: dataToSave.stato || undefined,
+          proprieta: formData.proprieta,
+          indirizzo: formData.indirizzo,
+          citta: formData.citta,
+          telefono: formData.telefono,
+          mail: formData.mail,
+          tipo_incarico: dataToSave.tipo_incarico || undefined,
+          comune: formData.comune,
+          catasto: formData.catasto,
+          fine_lavori: formData.fine_lavori,
+          pagamento: formData.pagamento,
+          note: formData.note,
+          created_at: editingPratica?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          stato_info: stati.find(s => s.id === dataToSave.stato),
+          tipo_incarico_info: tipoIncaricoSelezionato
+        } as ComuneCatasto;
+        
+        const statoCompletata = await verificaEAggiornaStatoCompletata(praticaSimulata);
+        if (statoCompletata) {
+          dataToSave.stato = statoCompletata;
+        }
+      }
 
       if (editingPratica) {
         // Modifica pratica esistente
@@ -276,7 +470,16 @@ export const ComuneCatastoPage: React.FC = () => {
           return;
         }
 
-        toast.success('Pratica modificata con successo');
+        let messaggioSuccesso = 'Pratica modificata con successo';
+        if (dataToSave.stato) {
+          const statoAggiornato = stati.find(s => s.id === dataToSave.stato);
+          if (statoAggiornato?.descrizione.toLowerCase().includes('completata')) {
+            messaggioSuccesso = 'Pratica modificata e marcata come completata!';
+          } else if (statoAggiornato?.descrizione.toLowerCase().includes('corso')) {
+            messaggioSuccesso = 'Pratica modificata e riportata in corso';
+          }
+        }
+        toast.success(messaggioSuccesso);
       } else {
         // Crea nuova pratica
         const { error } = await supabase
@@ -289,7 +492,16 @@ export const ComuneCatastoPage: React.FC = () => {
           return;
         }
 
-        toast.success('Pratica creata con successo');
+        let messaggioSuccesso = 'Pratica creata con successo';
+        if (dataToSave.stato) {
+          const statoAggiornato = stati.find(s => s.id === dataToSave.stato);
+          if (statoAggiornato?.descrizione.toLowerCase().includes('completata')) {
+            messaggioSuccesso = 'Pratica creata e marcata come completata!';
+          } else if (statoAggiornato?.descrizione.toLowerCase().includes('corso')) {
+            messaggioSuccesso = 'Pratica creata e impostata in corso';
+          }
+        }
+        toast.success(messaggioSuccesso);
       }
 
       closeModal();
@@ -297,6 +509,8 @@ export const ComuneCatastoPage: React.FC = () => {
     } catch (error) {
       console.error('Errore:', error);
       toast.error('Errore nel salvataggio');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -361,27 +575,79 @@ export const ComuneCatastoPage: React.FC = () => {
     });
   };
 
+  // Funzione per ottenere il tipo di incarico selezionato
+  const getTipoIncaricoSelezionato = () => {
+    if (!formData.tipo_incarico) return null;
+    return tipiIncarico.find(tipo => tipo.id === parseInt(formData.tipo_incarico));
+  };
+
+  // Funzione per verificare se un flag è abilitato
+  const isFlagAbilitato = (flagName: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
+    const tipoSelezionato = getTipoIncaricoSelezionato();
+    
+    switch (flagName) {
+      case 'comune':
+        return tipoSelezionato?.comune === true;
+      case 'catasto':
+        return tipoSelezionato?.catasto === true;
+      case 'fine_lavori':
+        // Fine lavori si abilita solo se il flag comune della pratica è true
+        return formData.comune === true;
+      case 'pagamento':
+        // Il pagamento è sempre abilitato
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  // Gestione del cambio di tipo incarico
+  const handleTipoIncaricoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nuovoTipoIncarico = e.target.value;
+    const tipoSelezionato = tipiIncarico.find(tipo => tipo.id === parseInt(nuovoTipoIncarico));
+    
+    setFormData(prev => {
+      const nuovoFormData = {
+        ...prev,
+        tipo_incarico: nuovoTipoIncarico
+      };
+
+      // Reset dei flag se il nuovo tipo di incarico non li supporta
+      if (!tipoSelezionato?.comune) {
+        nuovoFormData.comune = false;
+        nuovoFormData.fine_lavori = false; // Se comune diventa false, anche fine_lavori deve diventare false
+      }
+      
+      if (!tipoSelezionato?.catasto) {
+        nuovoFormData.catasto = false;
+      }
+
+      return nuovoFormData;
+    });
+  };
+
+  // Gestione del cambio del flag comune
+  const handleComuneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nuovoComune = e.target.checked;
+    
+    setFormData(prev => ({
+      ...prev,
+      comune: nuovoComune,
+      // Se comune diventa false, anche fine_lavori deve diventare false
+      fine_lavori: nuovoComune ? prev.fine_lavori : false
+    }));
+  };
+
   const getStatoStyle = (stato: StatoGenerale | undefined) => {
-    if (!stato) return 'bg-gray-100 text-gray-800';
+    if (!stato || !stato.colore) return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
     
-    // Mappiamo i colori comuni a classi Tailwind
-    const colorMap: { [key: string]: string } = {
-      '#10b981': 'bg-green-500 text-white',
-      '#22c55e': 'bg-green-500 text-white', 
-      '#ef4444': 'bg-red-500 text-white',
-      '#f59e0b': 'bg-yellow-500 text-white',
-      '#3b82f6': 'bg-blue-500 text-white',
-      '#8b5cf6': 'bg-purple-500 text-white',
-      '#06b6d4': 'bg-cyan-500 text-white',
-      '#84cc16': 'bg-lime-500 text-white',
-      'green': 'bg-green-500 text-white',
-      'red': 'bg-red-500 text-white',
-      'blue': 'bg-blue-500 text-white',
-      'yellow': 'bg-yellow-500 text-white',
-      'purple': 'bg-purple-500 text-white',
-    };
-    
-    return colorMap[stato.colore] || 'bg-gray-500 text-white';
+    // Usa direttamente il colore dalla tabella stati_generali
+    return `text-white`;
+  };
+
+  const getStatoBackgroundColor = (stato: StatoGenerale | undefined) => {
+    if (!stato || !stato.colore) return '#6b7280'; // gray-500 come fallback
+    return stato.colore;
   };
 
   const renderCheckIcon = (value: boolean) => {
@@ -666,7 +932,10 @@ export const ComuneCatastoPage: React.FC = () => {
                 pratiche.map((pratica) => (
                   <tr key={pratica.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(pratica.stato_info)}`}>
+                      <span 
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(pratica.stato_info)}`}
+                        style={{ backgroundColor: getStatoBackgroundColor(pratica.stato_info) }}
+                      >
                         {pratica.stato_info?.descrizione || 'N/A'}
                       </span>
                     </td>
@@ -697,8 +966,17 @@ export const ComuneCatastoPage: React.FC = () => {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'comune')}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                        title="Clicca per cambiare stato"
+                        disabled={!isFlagAbilitatoInTabella(pratica, 'comune')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isFlagAbilitatoInTabella(pratica, 'comune')
+                            ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
+                            : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        title={
+                          isFlagAbilitatoInTabella(pratica, 'comune')
+                            ? 'Clicca per cambiare stato'
+                            : 'Non abilitato per questo tipo di incarico'
+                        }
                       >
                         {renderCheckIcon(pratica.comune)}
                       </button>
@@ -706,8 +984,17 @@ export const ComuneCatastoPage: React.FC = () => {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'catasto')}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                        title="Clicca per cambiare stato"
+                        disabled={!isFlagAbilitatoInTabella(pratica, 'catasto')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isFlagAbilitatoInTabella(pratica, 'catasto')
+                            ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
+                            : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        title={
+                          isFlagAbilitatoInTabella(pratica, 'catasto')
+                            ? 'Clicca per cambiare stato'
+                            : 'Non abilitato per questo tipo di incarico'
+                        }
                       >
                         {renderCheckIcon(pratica.catasto)}
                       </button>
@@ -715,8 +1002,17 @@ export const ComuneCatastoPage: React.FC = () => {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'fine_lavori')}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                        title="Clicca per cambiare stato"
+                        disabled={!isFlagAbilitatoInTabella(pratica, 'fine_lavori')}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isFlagAbilitatoInTabella(pratica, 'fine_lavori')
+                            ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
+                            : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        title={
+                          isFlagAbilitatoInTabella(pratica, 'fine_lavori')
+                            ? 'Clicca per cambiare stato'
+                            : 'Abilitato solo se Comune è attivo'
+                        }
                       >
                         {renderCheckIcon(pratica.fine_lavori)}
                       </button>
@@ -724,7 +1020,7 @@ export const ComuneCatastoPage: React.FC = () => {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'pagamento')}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
                         title="Clicca per cambiare stato"
                       >
                         {renderCheckIcon(pratica.pagamento)}
@@ -870,7 +1166,7 @@ export const ComuneCatastoPage: React.FC = () => {
                       name="telefono"
                       value={formData.telefono}
                       onChange={handleInputChange}
-                      placeholder="Numero di telefono"
+                      placeholder="XXX XXX XXXX"
                       className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                     />
                   </div>
@@ -902,7 +1198,7 @@ export const ComuneCatastoPage: React.FC = () => {
                       <select
                         name="tipo_incarico"
                         value={formData.tipo_incarico}
-                        onChange={handleInputChange}
+                        onChange={handleTipoIncaricoChange}
                         className="input w-full pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       >
                         <option value="">-- Seleziona tipo incarico --</option>
@@ -918,113 +1214,122 @@ export const ComuneCatastoPage: React.FC = () => {
 
                   {/* Checkboxes con stile migliorato */}
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <label className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
-                        formData.comune 
-                          ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-500 text-purple-700 dark:text-purple-300' 
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          name="comune"
-                          checked={formData.comune}
-                          onChange={handleInputChange}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
-                          formData.comune 
-                            ? 'border-purple-500 bg-purple-500' 
-                            : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                                          <div className="grid grid-cols-2 gap-4">
+                        <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
+                          !isFlagAbilitato('comune') 
+                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' 
+                            : formData.comune 
+                              ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-500 text-purple-700 dark:text-purple-300 cursor-pointer' 
+                              : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
-                          {formData.comune && (
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium">Comune</span>
-                      </label>
+                          <input
+                            type="checkbox"
+                            name="comune"
+                            checked={formData.comune}
+                            onChange={handleComuneChange}
+                            disabled={!isFlagAbilitato('comune')}
+                            className="sr-only"
+                          />
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                            formData.comune 
+                              ? 'border-purple-500 bg-purple-500' 
+                              : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                          }`}>
+                            {formData.comune && (
+                              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium">Comune</span>
+                        </label>
 
-                      <label className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
-                        formData.catasto 
-                          ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-700 dark:text-indigo-300' 
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          name="catasto"
-                          checked={formData.catasto}
-                          onChange={handleInputChange}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
-                          formData.catasto 
-                            ? 'border-indigo-500 bg-indigo-500' 
-                            : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                        <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
+                          !isFlagAbilitato('catasto') 
+                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' 
+                            : formData.catasto 
+                              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-700 dark:text-indigo-300 cursor-pointer' 
+                              : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
-                          {formData.catasto && (
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium">Catasto</span>
-                      </label>
-                    </div>
+                          <input
+                            type="checkbox"
+                            name="catasto"
+                            checked={formData.catasto}
+                            onChange={handleInputChange}
+                            disabled={!isFlagAbilitato('catasto')}
+                            className="sr-only"
+                          />
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                            formData.catasto 
+                              ? 'border-indigo-500 bg-indigo-500' 
+                              : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                          }`}>
+                            {formData.catasto && (
+                              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium">Catasto</span>
+                        </label>
+                      </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <label className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
-                        formData.fine_lavori 
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-300' 
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          name="fine_lavori"
-                          checked={formData.fine_lavori}
-                          onChange={handleInputChange}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
-                          formData.fine_lavori 
-                            ? 'border-green-500 bg-green-500' 
-                            : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                      <div className="grid grid-cols-2 gap-4">
+                        <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
+                          !isFlagAbilitato('fine_lavori') 
+                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' 
+                            : formData.fine_lavori 
+                              ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-300 cursor-pointer' 
+                              : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
-                          {formData.fine_lavori && (
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium">Fine Lavori</span>
-                      </label>
+                          <input
+                            type="checkbox"
+                            name="fine_lavori"
+                            checked={formData.fine_lavori}
+                            onChange={handleInputChange}
+                            disabled={!isFlagAbilitato('fine_lavori')}
+                            className="sr-only"
+                          />
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                            formData.fine_lavori 
+                              ? 'border-green-500 bg-green-500' 
+                              : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                          }`}>
+                            {formData.fine_lavori && (
+                              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium">Fine Lavori</span>
+                        </label>
 
-                      <label className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${
-                        formData.pagamento 
-                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-300' 
-                          : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          name="pagamento"
-                          checked={formData.pagamento}
-                          onChange={handleInputChange}
-                          className="sr-only"
-                        />
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                        <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
                           formData.pagamento 
-                            ? 'border-blue-500 bg-blue-500' 
-                            : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-300 cursor-pointer' 
+                            : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
-                          {formData.pagamento && (
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium">Pagamento</span>
-                      </label>
-                    </div>
+                          <input
+                            type="checkbox"
+                            name="pagamento"
+                            checked={formData.pagamento}
+                            onChange={handleInputChange}
+                            className="sr-only"
+                          />
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                            formData.pagamento 
+                              ? 'border-blue-500 bg-blue-500' 
+                              : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                          }`}>
+                            {formData.pagamento && (
+                              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium">Pagamento</span>
+                        </label>
+                      </div>
                   </div>
 
                   {/* Note */}
@@ -1045,20 +1350,41 @@ export const ComuneCatastoPage: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-500 dark:text-gray-400">* Campo obbligatorio</p>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <p>* Campo obbligatorio</p>
+                  <p className="mt-1">
+                    <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg dark:bg-gray-600 dark:text-gray-100 dark:border-gray-500">
+                      {navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'}
+                    </kbd>
+                    {' + '}
+                    <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg dark:bg-gray-600 dark:text-gray-100 dark:border-gray-500">
+                      Invio
+                    </kbd>
+                    {' per salvare'}
+                  </p>
+                </div>
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    disabled={submitting}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Annulla
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    disabled={submitting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingPratica ? 'Modifica' : 'Salva'}
+                    {submitting ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        {editingPratica ? 'Modifica...' : 'Salvataggio...'}
+                      </div>
+                    ) : (
+                      editingPratica ? 'Modifica' : 'Salva'
+                    )}
                   </button>
                 </div>
               </div>

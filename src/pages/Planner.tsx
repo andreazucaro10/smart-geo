@@ -155,12 +155,13 @@ const GridCell: React.FC<GridCellProps> = ({ category, day, tasks, onEdit, onDel
     <div 
       ref={setNodeRef}
       className={`
-        group min-h-[120px] p-2 border border-gray-200 dark:border-gray-700 transition-all duration-200
-        bg-white dark:bg-gray-800 relative
+        group p-2 border border-gray-200 dark:border-gray-700 transition-all duration-200
+        bg-white dark:bg-gray-800 relative flex flex-col
         ${isOver && canDrop ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 border-2' : ''}
         ${canDrop && !isOver ? 'border-dashed border-gray-400 dark:border-gray-500' : ''}
-        ${tasks.length > 3 ? 'min-h-[180px]' : 'min-h-[120px]'}
+        min-h-[120px]
       `}
+      style={{ minHeight: Math.max(120, tasks.length * 45 + 60) + 'px' }}
     >
       {/* Bottone + per aggiungere task (solo desktop) */}
       <button
@@ -184,7 +185,7 @@ const GridCell: React.FC<GridCellProps> = ({ category, day, tasks, onEdit, onDel
       </button>
 
       <SortableContext items={tasks.map(t => t.id.toString())} strategy={verticalListSortingStrategy}>
-        <div className="space-y-1">
+        <div className="space-y-1 flex-1 min-h-0">
           {tasks.map((task) => (
             <DraggableTask
               key={task.id}
@@ -195,17 +196,9 @@ const GridCell: React.FC<GridCellProps> = ({ category, day, tasks, onEdit, onDel
             />
           ))}
           
-          {/* Zona di drop estesa per celle con molte task */}
-          {tasks.length > 3 && canDrop && (
-            <div className={`
-              h-8 rounded-lg border-2 border-dashed transition-all duration-200
-              ${isOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600'}
-              flex items-center justify-center
-            `}>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {isOver ? 'Rilascia qui' : 'Zona di drop'}
-              </span>
-            </div>
+          {/* Area di drop invisibile che occupa tutto lo spazio rimanente */}
+          {canDrop && (
+            <div className="flex-1 min-h-[20px]" />
           )}
         </div>
       </SortableContext>
@@ -218,7 +211,12 @@ export const Planner: React.FC = () => {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
     const monday = new Date(today);
-    monday.setDate(today.getDate() - today.getDay() + 1);
+    // getDay() restituisce 0 per domenica, 1 per lunedì, etc.
+    // Per ottenere il lunedì: se oggi è domenica (0), sottraiamo 6 giorni
+    // altrimenti sottraiamo (getDay() - 1) giorni
+    const dayOfWeek = today.getDay();
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    monday.setDate(today.getDate() - daysToSubtract);
     return monday;
   });
 
@@ -426,9 +424,7 @@ export const Planner: React.FC = () => {
     const { active, over } = event;
     
     if (!over) {
-      console.log('Drop fallito: nessun target trovato');
       setActiveId(null);
-      // Rimuovi classe di blocco touch
       document.body.classList.remove('dnd-touch-fix');
       return;
     }
@@ -458,7 +454,7 @@ export const Planner: React.FC = () => {
             const [removed] = reorderedTasks.splice(activeIndex, 1);
             reorderedTasks.splice(overIndex, 0, removed);
             
-            // Aggiornamento ottimistico: aggiorna subito l'interfaccia
+            // Aggiornamento ottimistico
             setTasks(prevTasks => {
               const newTasks = [...prevTasks];
               reorderedTasks.forEach((task, index) => {
@@ -470,7 +466,7 @@ export const Planner: React.FC = () => {
               return newTasks;
             });
 
-            // Sincronizza con il database in background
+            // Sincronizza con il database
             const updates = reorderedTasks.map((task, index) => 
               supabase
                 .from('planner_tasks')
@@ -481,19 +477,48 @@ export const Planner: React.FC = () => {
             Promise.all(updates).catch(error => {
               console.error('Errore riordinamento task:', error);
               toast.error('Errore nel riordinamento delle task');
-              // In caso di errore, ricarica i dati
               loadTasks();
             });
           }
+        } else {
+          // Spostamento su task di cella diversa - sposta nella cella della task target
+          const targetCellTasks = tasks.filter(t => 
+            t.category === overTask.category && 
+            t.day === overTask.day
+          );
+          const nextPosition = Math.max(...targetCellTasks.map(t => t.order_position)) + 1;
+
+          setTasks(tasks => 
+            tasks.map(task => 
+              task.id === activeId 
+                ? { ...task, category: overTask.category, day: overTask.day, order_position: nextPosition }
+                : task
+            )
+          );
+
+          supabase
+            .from('planner_tasks')
+            .update({ 
+              category: overTask.category, 
+              day: overTask.day,
+              order_position: nextPosition
+            })
+            .eq('id', activeId)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Errore spostamento task:', error);
+                toast.error('Errore nello spostamento della task');
+                loadTasks();
+              }
+            });
         }
       }
     } else {
-      // Spostamento tra celle diverse
+      // Spostamento su cella vuota o area di drop
       const [newCategoryStr, newDay] = overId.split('-');
       const newCategoryId = parseInt(newCategoryStr);
       
       if (newCategoryId && newDay) {
-        // Calcola la prossima posizione nella cella di destinazione
         const targetCellTasks = tasks.filter(t => 
           t.category === newCategoryId && 
           t.day === newDay
@@ -502,7 +527,6 @@ export const Planner: React.FC = () => {
           ? Math.max(...targetCellTasks.map(t => t.order_position)) + 1 
           : 0;
 
-        // Aggiornamento ottimistico: aggiorna subito l'interfaccia
         setTasks(tasks => 
           tasks.map(task => 
             task.id === activeId 
@@ -511,7 +535,6 @@ export const Planner: React.FC = () => {
           )
         );
 
-        // Sincronizza con il database in background
         supabase
           .from('planner_tasks')
           .update({ 
@@ -524,7 +547,6 @@ export const Planner: React.FC = () => {
             if (error) {
               console.error('Errore spostamento task:', error);
               toast.error('Errore nello spostamento della task');
-              // In caso di errore, ricarica i dati
               loadTasks();
             }
           });
@@ -532,8 +554,6 @@ export const Planner: React.FC = () => {
     }
 
     setActiveId(null);
-    
-    // Rimuovi classe di blocco touch
     document.body.classList.remove('dnd-touch-fix');
   };
 
