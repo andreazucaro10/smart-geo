@@ -57,19 +57,7 @@ const DAYS_OF_WEEK = [
   { key: 'sunday', label: 'Domenica', short: 'DOM' },
 ];
 
-// Funzione per tradurre i giorni da italiano a inglese
-const translateDayToEnglish = (italianDay: string): string => {
-  const dayMap: { [key: string]: string } = {
-    'lunedì': 'monday',
-    'martedì': 'tuesday', 
-    'mercoledì': 'wednesday',
-    'giovedì': 'thursday',
-    'venerdì': 'friday',
-    'sabato': 'saturday',
-    'domenica': 'sunday'
-  };
-  return dayMap[italianDay.toLowerCase()] || italianDay;
-};
+
 
 // Componente per le task trascinabili
 interface DraggableTaskProps {
