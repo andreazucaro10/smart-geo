@@ -46,8 +46,8 @@ const StatCard: React.FC<StatCardProps> = ({
     >
       <div className="flex items-center">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
           {trend && (
             <div className={`flex items-center mt-1 text-sm ${
               trend.isPositive ? 'text-green-600' : 'text-red-600'
@@ -84,10 +84,10 @@ export const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Panoramica dello studio</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-300">Panoramica dello studio</p>
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500 dark:text-gray-400">
           Aggiornato: {new Date().toLocaleDateString('it-IT')}
         </div>
       </div>
@@ -155,7 +155,7 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pratiche recenti */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Pratiche Recenti
           </h3>
           <div className="space-y-3">
@@ -165,12 +165,12 @@ export const Dashboard: React.FC = () => {
               { cliente: 'Luca Bianchi', tipo: 'APE', data: '2024-01-13' },
               { cliente: 'Sofia Neri', tipo: 'Varie', data: '2024-01-12' },
             ].map((pratica, index) => (
-              <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+              <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
                 <div>
-                  <p className="font-medium text-gray-900">{pratica.cliente}</p>
-                  <p className="text-sm text-gray-500">{pratica.tipo}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{pratica.cliente}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{pratica.tipo}</p>
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
                   {new Date(pratica.data).toLocaleDateString('it-IT')}
                 </div>
               </div>
@@ -180,7 +180,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Scadenze imminenti */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Scadenze Imminenti
           </h3>
           <div className="space-y-3">
@@ -189,15 +189,15 @@ export const Dashboard: React.FC = () => {
               { descrizione: 'Pagamento software CAD', data: '2024-01-25', importo: 800 },
               { descrizione: 'Tasse comunali', data: '2024-01-30', importo: 450 },
             ].map((scadenza, index) => (
-              <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+              <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
                 <div>
-                  <p className="font-medium text-gray-900">{scadenza.descrizione}</p>
-                  <p className="text-sm text-red-600 flex items-center">
+                  <p className="font-medium text-gray-900 dark:text-white">{scadenza.descrizione}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400 flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />
                     {new Date(scadenza.data).toLocaleDateString('it-IT')}
                   </p>
                 </div>
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-gray-900 dark:text-white">
                   €{scadenza.importo}
                 </div>
               </div>

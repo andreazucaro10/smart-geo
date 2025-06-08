@@ -246,7 +246,7 @@ export const Spese: React.FC = () => {
       </div>
 
       {/* Filtri */}
-      <div className="card dark:bg-gray-800 dark:border-gray-700">
+      <div className="card">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           {/* Campo di ricerca */}
           <div className="md:col-span-2">
@@ -256,7 +256,7 @@ export const Spese: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Cerca..."
-                className="input pl-10 pr-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+                className="input pl-10 pr-10"
               />
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
               {searchTerm && (
@@ -309,7 +309,7 @@ export const Spese: React.FC = () => {
                 value={dataDa}
                 onChange={(e) => setDataDa(e.target.value)}
                 placeholder="Da GG/MM/AAAA"
-                className="input pr-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+                className="input pr-10"
               />
               <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
             </div>
@@ -323,7 +323,7 @@ export const Spese: React.FC = () => {
                 value={dataA}
                 onChange={(e) => setDataA(e.target.value)}
                 placeholder="A GG/MM/AAAA"
-                className="input pr-10 mt-6 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+                className="input pr-10 mt-6"
               />
               <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
             </div>
@@ -339,7 +339,7 @@ export const Spese: React.FC = () => {
             </button>
             <button
               onClick={handleClearSearch}
-              className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 flex items-center gap-2"
+              className="btn btn-outline flex items-center gap-2"
             >
               <X className="w-4 h-4" />
             </button>
@@ -348,7 +348,7 @@ export const Spese: React.FC = () => {
       </div>
 
       {/* Tabella Spese */}
-      <div className="card p-0 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+      <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
@@ -472,7 +472,7 @@ export const Spese: React.FC = () => {
                   value={formData.descrizione}
                   onChange={handleInputChange}
                   placeholder="Descrizione della scadenza"
-                  className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  className="input w-full"
                   required
                 />
               </div>
@@ -492,7 +492,7 @@ export const Spese: React.FC = () => {
                     placeholder="Importo spese"
                     step="0.01"
                     min="0"
-                    className="input w-full pl-8 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    className="input w-full pl-8"
                   />
                 </div>
               </div>
@@ -507,7 +507,7 @@ export const Spese: React.FC = () => {
                   name="data_scadenza"
                   value={formData.data_scadenza}
                   onChange={handleInputChange}
-                  className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="input w-full"
                 />
               </div>
 
@@ -537,7 +537,7 @@ export const Spese: React.FC = () => {
                     name="data_pagamento"
                     value={formData.data_pagamento}
                     onChange={handleInputChange}
-                    className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="input w-full"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Lo stato della scadenza verrà determinato automaticamente in base alla data
@@ -561,7 +561,7 @@ export const Spese: React.FC = () => {
                     setShowModal(false);
                     resetForm();
                   }}
-                  className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="btn btn-outline"
                   disabled={submitting}
                 >
                   Annulla

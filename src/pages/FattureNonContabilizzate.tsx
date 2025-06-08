@@ -334,7 +334,7 @@ export const FattureNonContabilizzate: React.FC = () => {
       </div>
 
       {/* Filtri */}
-      <div className="card dark:bg-gray-800 dark:border-gray-700">
+      <div className="card">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           {/* Filtro Proprietà */}
           <div>
@@ -346,7 +346,7 @@ export const FattureNonContabilizzate: React.FC = () => {
               value={filtroProprietario}
               onChange={(e) => setFiltroProprietario(e.target.value)}
               placeholder="Proprietà fattura"
-              className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+              className="input"
             />
           </div>
 
@@ -358,7 +358,7 @@ export const FattureNonContabilizzate: React.FC = () => {
             <select
               value={filtroMese}
               onChange={(e) => setFiltroMese(e.target.value)}
-              className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+              className="input"
             >
               <option value="" className="dark:bg-gray-700 dark:text-white">Tutti i mesi</option>
               {mesi.map((mese) => (
@@ -377,7 +377,7 @@ export const FattureNonContabilizzate: React.FC = () => {
             <select
               value={filtroAnno}
               onChange={(e) => setFiltroAnno(e.target.value)}
-              className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+              className="input"
             >
               <option value="" className="dark:bg-gray-700 dark:text-white">Tutti gli anni</option>
               {anni.map((anno) => (
@@ -396,7 +396,7 @@ export const FattureNonContabilizzate: React.FC = () => {
             <select
               value={recordsPerPage}
               onChange={(e) => handleRecordsPerPageChange(parseInt(e.target.value))}
-              className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500/20"
+              className="input"
             >
               {recordsPerPageOptions.map((option) => (
                 <option key={option} value={option} className="dark:bg-gray-700 dark:text-white">
@@ -417,7 +417,7 @@ export const FattureNonContabilizzate: React.FC = () => {
             </button>
             <button
               onClick={handleReset}
-              className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 flex items-center gap-2"
+              className="btn btn-outline flex items-center gap-2"
             >
               <RotateCcw className="w-4 h-4" />
               Reset
@@ -435,7 +435,7 @@ export const FattureNonContabilizzate: React.FC = () => {
           <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
-            className="btn btn-outline btn-sm disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="btn btn-outline btn-sm disabled:opacity-50"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -443,7 +443,7 @@ export const FattureNonContabilizzate: React.FC = () => {
           <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
-            className="btn btn-outline btn-sm disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="btn btn-outline btn-sm disabled:opacity-50"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -451,7 +451,7 @@ export const FattureNonContabilizzate: React.FC = () => {
       </div>
 
       {/* Tabella Fatture */}
-      <div className="card p-0 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+      <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
@@ -586,7 +586,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                     value={formData.nome}
                     onChange={handleInputChange}
                     placeholder="Nome della proprietà"
-                    className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    className="input w-full"
                     required
                   />
                 </div>
@@ -601,7 +601,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                     name="data_emissione"
                     value={formData.data_emissione}
                     onChange={handleInputChange}
-                    className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="input w-full"
                     required
                   />
                 </div>
@@ -619,7 +619,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                     placeholder="0.00"
                     step="0.01"
                     min="0"
-                    className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    className="input w-full"
                     required
                   />
                 </div>
@@ -637,7 +637,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                     placeholder="0.00"
                     step="0.01"
                     min="0"
-                    className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    className="input w-full"
                     required
                   />
                 </div>
@@ -654,7 +654,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                   onChange={handleInputChange}
                   placeholder="Note aggiuntive..."
                   rows={4}
-                  className="input w-full resize-none dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  className="input w-full resize-none"
                 />
               </div>
 
@@ -663,7 +663,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  className="btn btn-outline"
                   disabled={submitting}
                 >
                   Annulla

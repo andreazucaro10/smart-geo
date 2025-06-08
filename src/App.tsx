@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
@@ -13,6 +13,7 @@ import { Spese } from './pages/Spese';
 import { ComuneCatastoPage } from './pages/ComuneCatasto';
 import { ApePage } from './pages/Ape';
 import { Parametri } from './pages/Parametri';
+import { Planner } from './pages/Planner';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -42,15 +43,7 @@ function App() {
             <Route path="dashboard" element={<Navigate to="/" replace />} />
             
             {/* Placeholder per le altre pagine */}
-            <Route 
-              path="planner" 
-              element={
-                <div className="text-center py-12">
-                  <h1 className="text-2xl font-bold text-gray-900">Planner</h1>
-                  <p className="text-gray-600 mt-2">Pagina in sviluppo</p>
-                </div>
-              } 
-            />
+            <Route path="planner" element={<Planner />} />
             <Route path="contabilita" element={<Contabilita />} />
             <Route path="fatture-non-contabilizzate" element={<FattureNonContabilizzate />} />
             <Route path="spese" element={<Spese />} />
