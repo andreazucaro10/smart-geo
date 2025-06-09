@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Menu, User, LogOut, Settings, Bell, Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -7,7 +7,7 @@ interface HeaderProps {
   onMenuClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
+export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, signOut } = useAuthStore();
   const { isDark, toggleTheme } = useThemeStore();
@@ -18,49 +18,49 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 transition-colors">
-      <div className="flex items-center justify-between">
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 py-2 transition-colors min-h-[3.5rem] max-h-[3.5rem]">
+      <div className="flex items-center justify-between h-full">
         {/* Left Side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 min-w-0 flex-shrink">
           {/* Mobile Menu Button */}
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
           >
-            <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <Menu className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
           
-          {/* Page Title placeholder - this could be dynamic */}
-          <div className="hidden md:block">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          {/* Page Title */}
+          <div className="hidden sm:block min-w-0">
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
               Smart-Geo
             </h1>
           </div>
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {/* Notifications */}
-          <button className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          <button className="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <Bell className="w-4 h-4 text-gray-600 dark:text-gray-300" />
             {/* Notification badge */}
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
           </button>
 
           {/* User Menu */}
           <div className="relative">
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors max-w-[200px]"
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
+              <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <User className="w-3 h-3 text-white" />
               </div>
-              <div className="hidden md:block text-left">
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              <div className="hidden lg:block text-left min-w-0">
+                <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
                   {user?.username || user?.email?.split('@')[0] || 'Utente'}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {user?.email}
                 </div>
               </div>
@@ -76,12 +76,12 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                 />
                 
                 {/* Menu */}
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-20">
-                  <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20">
+                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                       {user?.username || 'Utente'}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                       {user?.email}
                     </div>
                   </div>
@@ -89,22 +89,22 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <div className="py-1">
                     <button 
                       onClick={toggleTheme}
-                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                      {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                       {isDark ? 'Modalità chiara' : 'Modalità scura'}
                     </button>
                     
-                    <button className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                      <Settings className="w-4 h-4" />
+                    <button className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                      <Settings className="w-3.5 h-3.5" />
                       Impostazioni
                     </button>
                     
                     <button 
                       onClick={handleSignOut}
-                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
-                      <LogOut className="w-4 h-4" />
+                      <LogOut className="w-3.5 h-3.5" />
                       Disconnetti
                     </button>
                   </div>
