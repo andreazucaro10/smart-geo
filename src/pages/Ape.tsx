@@ -1,9 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Calendar, ChevronDown, Edit, Trash2, Check, X } from 'lucide-react';
+import { Plus, Search, Calendar, ChevronDown, Edit, Trash2, Check, X, Save } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import type { Ape, StatoApe } from '../types';
 import toast from 'react-hot-toast';
+
+interface ApeFormData {
+  committente: string;
+  proprieta: string;
+  indirizzo: string;
+  citta: string;
+  mail: string;
+  telefono: string;
+  note: string;
+  registrazione: number | null;
+  progressivo: string;
+  pagamento: boolean;
+}
 
 export const ApePage: React.FC = () => {
   const [pratiche, setPratiche] = useState<Ape[]>([]);
@@ -18,7 +31,161 @@ export const ApePage: React.FC = () => {
     completateNonPagate: false
   });
   const [showModal, setShowModal] = useState(false);
+  const [editingPratica, setEditingPratica] = useState<Ape | null>(null);
+  const [formData, setFormData] = useState<ApeFormData>({
+    committente: '',
+    proprieta: '',
+    indirizzo: '',
+    citta: '',
+    mail: '',
+    telefono: '',
+    note: '',
+    registrazione: null,
+    progressivo: '',
+    pagamento: false
+  });
+  const [submitting, setSubmitting] = useState(false);
   const { user } = useAuthStore();
+
+  const resetForm = () => {
+    setFormData({
+      committente: '',
+      proprieta: '',
+      indirizzo: '',
+      citta: '',
+      mail: '',
+      telefono: '',
+      note: '',
+      registrazione: null,
+      progressivo: '',
+      pagamento: false
+    });
+    setEditingPratica(null);
+  };
+
+  const openCreateModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const openEditModal = (pratica: Ape) => {
+    setFormData({
+      committente: pratica.committente || '',
+      proprieta: pratica.proprieta || '',
+      indirizzo: pratica.indirizzo || '',
+      citta: pratica.citta || '',
+      mail: pratica.mail || '',
+      telefono: pratica.telefono || '',
+      note: pratica.note || '',
+      registrazione: pratica.registrazione || null,
+      progressivo: pratica.progressivo || '',
+      pagamento: pratica.pagamento || false
+    });
+    setEditingPratica(pratica);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    resetForm();
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    // Rimuovi tutti i caratteri non numerici
+    const numbers = value.replace(/\D/g, '');
+    
+    // Limita a 10 cifre
+    const truncated = numbers.slice(0, 10);
+    
+    // Applica la formattazione XXX XXX XXXX
+    if (truncated.length <= 3) {
+      return truncated;
+    } else if (truncated.length <= 6) {
+      return `${truncated.slice(0, 3)} ${truncated.slice(3)}`;
+    } else {
+      return `${truncated.slice(0, 3)} ${truncated.slice(3, 6)} ${truncated.slice(6)}`;
+    }
+  };
+
+  const handleInputChange = (field: keyof ApeFormData, value: string | number | boolean | null) => {
+    // Formatta il numero di telefono se il campo è 'telefono'
+    if (field === 'telefono' && typeof value === 'string') {
+      value = formatPhoneNumber(value);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.committente.trim()) {
+      toast.error('Il committente è obbligatorio');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const dataToSubmit = {
+        committente: formData.committente.trim(),
+        proprieta: formData.proprieta.trim() || null,
+        indirizzo: formData.indirizzo.trim() || null,
+        citta: formData.citta.trim() || null,
+        mail: formData.mail.trim() || null,
+        telefono: formData.telefono.trim() || null,
+        note: formData.note.trim() || null,
+        registrazione: formData.registrazione || null,
+        progressivo: formData.progressivo.trim() || null,
+        pagamento: formData.pagamento,
+        user_id: user?.id
+      };
+
+      if (editingPratica) {
+        // Modifica
+        const { error } = await supabase
+          .from('ape')
+          .update({
+            ...dataToSubmit,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingPratica.id)
+          .eq('user_id', user?.id);
+
+        if (error) {
+          console.error('Errore modifica:', error);
+          toast.error('Errore nella modifica della pratica APE');
+          return;
+        }
+
+        toast.success('Pratica APE modificata con successo');
+      } else {
+        // Creazione
+        const { error } = await supabase
+          .from('ape')
+          .insert([dataToSubmit]);
+
+        if (error) {
+          console.error('Errore creazione:', error);
+          toast.error('Errore nella creazione della pratica APE');
+          return;
+        }
+
+        toast.success('Pratica APE creata con successo');
+      }
+
+      closeModal();
+      fetchData();
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nell\'operazione');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -167,7 +334,7 @@ export const ApePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{marginTop: '0px'}}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -175,7 +342,7 @@ export const ApePage: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300">Gestione pratiche APE</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openCreateModal}
           className="btn btn-primary flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -402,7 +569,7 @@ export const ApePage: React.FC = () => {
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button
-                          onClick={() => {/* TODO: Implementa modifica */}}
+                          onClick={() => openEditModal(pratica)}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
                           title="Modifica"
                         >
@@ -425,25 +592,235 @@ export const ApePage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Nuova Pratica APE - TODO: Implementare */}
+      {/* Modal Gestione Pratica APE */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Nuova Pratica APE</h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Modal per creare nuova pratica APE - da implementare
-            </p>
-            <div className="flex justify-end gap-2">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                {editingPratica ? 'Modifica Pratica APE' : 'Nuova Pratica APE'}
+              </h2>
               <button
-                onClick={() => setShowModal(false)}
-                className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
-                Annulla
-              </button>
-              <button className="btn btn-primary">
-                Salva
+                <X className="w-6 h-6" />
               </button>
             </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Prima riga - Committente e Proprietà */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Committente *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.committente}
+                    onChange={(e) => handleInputChange('committente', e.target.value)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Nome del committente"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Proprietà
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.proprieta}
+                    onChange={(e) => handleInputChange('proprieta', e.target.value)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Nome del proprietario"
+                  />
+                </div>
+              </div>
+
+              {/* Seconda riga - Indirizzo e Città */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Indirizzo
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.indirizzo}
+                    onChange={(e) => handleInputChange('indirizzo', e.target.value)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Via, numero civico"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Città
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.citta}
+                    onChange={(e) => handleInputChange('citta', e.target.value)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Città"
+                  />
+                </div>
+              </div>
+
+              {/* Terza riga - Email e Telefono */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.mail}
+                    onChange={(e) => handleInputChange('mail', e.target.value)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="email@esempio.com"
+                  />
+                </div>
+                                 <div>
+                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                     Telefono
+                   </label>
+                   <input
+                     type="tel"
+                     value={formData.telefono}
+                     onChange={(e) => handleInputChange('telefono', e.target.value)}
+                     className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                     placeholder="123 456 7890"
+                     maxLength={12}
+                   />
+                 </div>
+              </div>
+
+              {/* Quarta riga - Stato e Progressivo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Stato Registrazione
+                  </label>
+                  <select
+                    value={formData.registrazione || ''}
+                    onChange={(e) => handleInputChange('registrazione', e.target.value ? parseInt(e.target.value) : null)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="">-- Seleziona stato --</option>
+                    {stati.map((stato) => (
+                      <option key={stato.id} value={stato.id}>
+                        {stato.descrizione}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Progressivo
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.progressivo}
+                    onChange={(e) => handleInputChange('progressivo', e.target.value)}
+                    className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Numero progressivo"
+                  />
+                </div>
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Note
+                </label>
+                <textarea
+                  value={formData.note}
+                  onChange={(e) => handleInputChange('note', e.target.value)}
+                  rows={3}
+                  className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none"
+                  placeholder="Note aggiuntive..."
+                />
+              </div>
+
+              {/* Checkbox Pagamento */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Stato Pagamento
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className={`relative inline-flex items-center cursor-pointer p-3 rounded-lg border-2 transition-all duration-200 ${
+                    formData.pagamento 
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50'
+                  }`}>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={formData.pagamento}
+                        onChange={(e) => handleInputChange('pagamento', e.target.checked)}
+                        className="sr-only"
+                      />
+                      <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                        formData.pagamento 
+                          ? 'bg-green-500 border-green-500' 
+                          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
+                      }`}>
+                        {formData.pagamento && (
+                          <Check className="w-4 h-4 text-white" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="ml-3">
+                      <div className={`text-sm font-medium transition-colors ${
+                        formData.pagamento 
+                          ? 'text-green-700 dark:text-green-300' 
+                          : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {formData.pagamento ? 'Pagamento effettuato' : 'Pagamento in sospeso'}
+                      </div>
+                      <div className={`text-xs transition-colors ${
+                        formData.pagamento 
+                          ? 'text-green-600 dark:text-green-400' 
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
+                        {formData.pagamento ? 'La pratica è stata saldata' : 'In attesa di pagamento'}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Bottoni */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  disabled={submitting}
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Salvataggio...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      {editingPratica ? 'Modifica' : 'Crea'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
