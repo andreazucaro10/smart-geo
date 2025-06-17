@@ -20,6 +20,9 @@ export const ComuneCatastoPage: React.FC = () => {
     nonPagati: false,
     completateNonPagate: false
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage, setRecordsPerPage] = useState(25);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editingPratica, setEditingPratica] = useState<ComuneCatasto | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -107,11 +110,73 @@ export const ComuneCatastoPage: React.FC = () => {
     };
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (customFilters?: {
+    searchTerm?: string;
+    filtroStato?: string;
+    filtroTipoIncarico?: string;
+    filtriAttivi?: typeof filtriAttivi;
+    page?: number;
+    perPage?: number;
+  }) => {
     try {
       setLoading(true);
       
-      // Carica pratiche con relazioni
+      // Usa i filtri personalizzati o quelli dello stato corrente
+      const currentSearchTerm = customFilters?.searchTerm ?? searchTerm;
+      const currentFiltroStato = customFilters?.filtroStato ?? filtroStato;
+      const currentFiltroTipoIncarico = customFilters?.filtroTipoIncarico ?? filtroTipoIncarico;
+      const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
+      const currentPageParam = customFilters?.page ?? currentPage;
+      const currentPerPage = customFilters?.perPage ?? recordsPerPage;
+      
+      // Prima query per contare il totale dei record
+      let countQuery = supabase
+        .from('comune_catasto')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user?.id);
+
+      // Applica filtri al conteggio
+      if (currentSearchTerm) {
+        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%`);
+      }
+
+      if (currentFiltroStato) {
+        countQuery = countQuery.eq('stato', parseInt(currentFiltroStato));
+      }
+
+      if (currentFiltroTipoIncarico) {
+        countQuery = countQuery.eq('tipo_incarico', parseInt(currentFiltroTipoIncarico));
+      }
+
+      if (currentFiltriAttivi.comune) {
+        countQuery = countQuery.eq('comune', true);
+      }
+
+      if (currentFiltriAttivi.catasto) {
+        countQuery = countQuery.eq('catasto', true);
+      }
+
+      if (currentFiltriAttivi.nonCompletati) {
+        countQuery = countQuery.eq('fine_lavori', false);
+      }
+
+      if (currentFiltriAttivi.nonPagati) {
+        countQuery = countQuery.eq('pagamento', false);
+      }
+
+      if (currentFiltriAttivi.completateNonPagate) {
+        countQuery = countQuery.eq('fine_lavori', true).eq('pagamento', false);
+      }
+
+      const { count, error: countError } = await countQuery;
+      
+      if (countError) {
+        console.error('Errore nel conteggio:', countError);
+      } else {
+        setTotalRecords(count || 0);
+      }
+      
+      // Query principale con paginazione
       let query = supabase
         .from('comune_catasto')
         .select(`
@@ -123,37 +188,42 @@ export const ComuneCatastoPage: React.FC = () => {
         .order('created_at', { ascending: false });
 
       // Applica filtri
-      if (searchTerm) {
-        query = query.or(`committente.ilike.%${searchTerm}%,indirizzo.ilike.%${searchTerm}%,proprieta.ilike.%${searchTerm}%`);
+      if (currentSearchTerm) {
+        query = query.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%`);
       }
 
-      if (filtroStato) {
-        query = query.eq('stato', parseInt(filtroStato));
+      if (currentFiltroStato) {
+        query = query.eq('stato', parseInt(currentFiltroStato));
       }
 
-      if (filtroTipoIncarico) {
-        query = query.eq('tipo_incarico', parseInt(filtroTipoIncarico));
+      if (currentFiltroTipoIncarico) {
+        query = query.eq('tipo_incarico', parseInt(currentFiltroTipoIncarico));
       }
 
-      if (filtriAttivi.comune) {
+      if (currentFiltriAttivi.comune) {
         query = query.eq('comune', true);
       }
 
-      if (filtriAttivi.catasto) {
+      if (currentFiltriAttivi.catasto) {
         query = query.eq('catasto', true);
       }
 
-      if (filtriAttivi.nonCompletati) {
+      if (currentFiltriAttivi.nonCompletati) {
         query = query.eq('fine_lavori', false);
       }
 
-      if (filtriAttivi.nonPagati) {
+      if (currentFiltriAttivi.nonPagati) {
         query = query.eq('pagamento', false);
       }
 
-      if (filtriAttivi.completateNonPagate) {
+      if (currentFiltriAttivi.completateNonPagate) {
         query = query.eq('fine_lavori', true).eq('pagamento', false);
       }
+
+      // Applica paginazione
+      const from = (currentPageParam - 1) * currentPerPage;
+      const to = from + currentPerPage - 1;
+      query = query.range(from, to);
 
       const { data: praticheData, error: praticheError } = await query;
 
@@ -201,10 +271,37 @@ export const ComuneCatastoPage: React.FC = () => {
   };
 
   const handleFilterToggle = (filterName: keyof typeof filtriAttivi) => {
-    setFiltriAttivi(prev => ({
-      ...prev,
-      [filterName]: !prev[filterName]
-    }));
+    const newFiltriAttivi = {
+      ...filtriAttivi,
+      [filterName]: !filtriAttivi[filterName]
+    };
+    
+    setFiltriAttivi(newFiltriAttivi);
+    setCurrentPage(1); // Reset alla prima pagina quando cambiano i filtri
+    
+    // Trigger automatico della ricerca con i nuovi filtri
+    fetchData({
+      filtriAttivi: newFiltriAttivi,
+      page: 1
+    });
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    fetchData({ page });
+  };
+
+  const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
+    setRecordsPerPage(newRecordsPerPage);
+    setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
+    fetchData({ 
+      perPage: newRecordsPerPage,
+      page: 1
+    });
+  };
+
+  const getTotalPages = () => {
+    return Math.ceil(totalRecords / recordsPerPage);
   };
 
   const handleToggleField = async (pratica: ComuneCatasto, field: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
@@ -650,11 +747,25 @@ export const ComuneCatastoPage: React.FC = () => {
     return stato.colore;
   };
 
-  const renderCheckIcon = (value: boolean) => {
-    return value ? (
-      <Check className="w-4 h-4 text-green-600" />
-    ) : (
-      <X className="w-4 h-4 text-gray-400" />
+  const renderToggleButton = (value: boolean, enabled: boolean = true) => {
+    return (
+      <div
+        className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 ${
+          enabled ? 'hover:scale-110' : ''
+        } ${
+          value 
+            ? 'bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50' 
+            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
+        } ${
+          !enabled ? 'opacity-50' : ''
+        }`}
+      >
+        {value ? (
+          <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+        ) : (
+          <X className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+        )}
+      </div>
     );
   };
 
@@ -702,7 +813,16 @@ export const ComuneCatastoPage: React.FC = () => {
           <div className="relative">
             <select
               value={filtroStato}
-              onChange={(e) => setFiltroStato(e.target.value)}
+              onChange={(e) => {
+                const newFiltroStato = e.target.value;
+                setFiltroStato(newFiltroStato);
+                setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
+                // Trigger automatico della ricerca con il nuovo stato
+                fetchData({
+                  filtroStato: newFiltroStato,
+                  page: 1
+                });
+              }}
               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">-- Tutti gli stati --</option>
@@ -719,7 +839,16 @@ export const ComuneCatastoPage: React.FC = () => {
           <div className="relative">
             <select
               value={filtroTipoIncarico}
-              onChange={(e) => setFiltroTipoIncarico(e.target.value)}
+              onChange={(e) => {
+                const newFiltroTipoIncarico = e.target.value;
+                setFiltroTipoIncarico(newFiltroTipoIncarico);
+                setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
+                // Trigger automatico della ricerca con il nuovo tipo incarico
+                fetchData({
+                  filtroTipoIncarico: newFiltroTipoIncarico,
+                  page: 1
+                });
+              }}
               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">-- Tutti i tipi di incarico --</option>
@@ -967,10 +1096,10 @@ export const ComuneCatastoPage: React.FC = () => {
                       <button
                         onClick={() => handleToggleField(pratica, 'comune')}
                         disabled={!isFlagAbilitatoInTabella(pratica, 'comune')}
-                        className={`p-2 rounded-lg transition-colors ${
+                        className={`transition-colors ${
                           isFlagAbilitatoInTabella(pratica, 'comune')
-                            ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
-                            : 'opacity-50 cursor-not-allowed'
+                            ? 'cursor-pointer'
+                            : 'cursor-not-allowed'
                         }`}
                         title={
                           isFlagAbilitatoInTabella(pratica, 'comune')
@@ -978,17 +1107,17 @@ export const ComuneCatastoPage: React.FC = () => {
                             : 'Non abilitato per questo tipo di incarico'
                         }
                       >
-                        {renderCheckIcon(pratica.comune)}
+                        {renderToggleButton(pratica.comune, isFlagAbilitatoInTabella(pratica, 'comune'))}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'catasto')}
                         disabled={!isFlagAbilitatoInTabella(pratica, 'catasto')}
-                        className={`p-2 rounded-lg transition-colors ${
+                        className={`transition-colors ${
                           isFlagAbilitatoInTabella(pratica, 'catasto')
-                            ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
-                            : 'opacity-50 cursor-not-allowed'
+                            ? 'cursor-pointer'
+                            : 'cursor-not-allowed'
                         }`}
                         title={
                           isFlagAbilitatoInTabella(pratica, 'catasto')
@@ -996,17 +1125,17 @@ export const ComuneCatastoPage: React.FC = () => {
                             : 'Non abilitato per questo tipo di incarico'
                         }
                       >
-                        {renderCheckIcon(pratica.catasto)}
+                        {renderToggleButton(pratica.catasto, isFlagAbilitatoInTabella(pratica, 'catasto'))}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'fine_lavori')}
                         disabled={!isFlagAbilitatoInTabella(pratica, 'fine_lavori')}
-                        className={`p-2 rounded-lg transition-colors ${
+                        className={`transition-colors ${
                           isFlagAbilitatoInTabella(pratica, 'fine_lavori')
-                            ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
-                            : 'opacity-50 cursor-not-allowed'
+                            ? 'cursor-pointer'
+                            : 'cursor-not-allowed'
                         }`}
                         title={
                           isFlagAbilitatoInTabella(pratica, 'fine_lavori')
@@ -1014,16 +1143,16 @@ export const ComuneCatastoPage: React.FC = () => {
                             : 'Abilitato solo se Comune è attivo'
                         }
                       >
-                        {renderCheckIcon(pratica.fine_lavori)}
+                        {renderToggleButton(pratica.fine_lavori, isFlagAbilitatoInTabella(pratica, 'fine_lavori'))}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(pratica, 'pagamento')}
-                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                        className="transition-colors cursor-pointer"
                         title="Clicca per cambiare stato"
                       >
-                        {renderCheckIcon(pratica.pagamento)}
+                        {renderToggleButton(pratica.pagamento, true)}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -1050,6 +1179,112 @@ export const ComuneCatastoPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Controlli Paginazione */}
+        {pratiche.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              {/* Info record */}
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Mostrando {Math.min((currentPage - 1) * recordsPerPage + 1, totalRecords)} - {Math.min(currentPage * recordsPerPage, totalRecords)} di {totalRecords} pratiche
+              </div>
+              
+              {/* Controlli centrali */}
+              <div className="flex items-center gap-4">
+                {/* Selezione record per pagina */}
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Record:</span>
+                  <select
+                    value={recordsPerPage}
+                    onChange={(e) => handleRecordsPerPageChange(parseInt(e.target.value))}
+                    className="input py-1 px-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </div>
+                
+                {/* Controlli navigazione */}
+                {getTotalPages() > 1 && (
+                  <div className="flex items-center gap-2">
+                    {/* Prima pagina */}
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                    >
+                      ««
+                    </button>
+                    
+                    {/* Pagina precedente */}
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                    >
+                      ‹
+                    </button>
+                    
+                    {/* Numeri pagina */}
+                    {Array.from({ length: Math.min(5, getTotalPages()) }, (_, i) => {
+                      let pageNum;
+                      if (getTotalPages() <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= getTotalPages() - 2) {
+                        pageNum = getTotalPages() - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`px-3 py-1 text-sm border rounded ${
+                            currentPage === pageNum
+                              ? 'bg-blue-500 text-white border-blue-500'
+                              : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-300'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    
+                    {/* Pagina successiva */}
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === getTotalPages()}
+                      className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                    >
+                      ›
+                    </button>
+                    
+                    {/* Ultima pagina */}
+                    <button
+                      onClick={() => handlePageChange(getTotalPages())}
+                      disabled={currentPage === getTotalPages()}
+                      className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                    >
+                      »»
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Info pagine */}
+              {getTotalPages() > 1 && (
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Pagina {currentPage} di {getTotalPages()}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Nuova Pratica */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Calendar, ChevronDown, Edit, Trash2, Check, X, Save } from 'lucide-react';
+import { Plus, Search, ChevronDown, Edit, Trash2, Check, X, Save } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import type { Ape, StatoApe } from '../types';
@@ -23,13 +23,13 @@ export const ApePage: React.FC = () => {
   const [stati, setStati] = useState<StatoApe[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dataDa, setDataDa] = useState('');
-  const [dataA, setDataA] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtriAttivi, setFiltriAttivi] = useState({
-    soloNonPagate: false,
-    completateNonPagate: false
+    soloNonPagate: false
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage, setRecordsPerPage] = useState(25);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editingPratica, setEditingPratica] = useState<Ape | null>(null);
   const [formData, setFormData] = useState<ApeFormData>({
@@ -107,16 +107,101 @@ export const ApePage: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof ApeFormData, value: string | number | boolean | null) => {
+  const handleInputChange = async (field: keyof ApeFormData, value: string | number | boolean | null) => {
     // Formatta il numero di telefono se il campo è 'telefono'
     if (field === 'telefono' && typeof value === 'string') {
       value = formatPhoneNumber(value);
+    }
+    
+    // Se stiamo cambiando lo stato di registrazione a "Completata" e non c'è un progressivo
+    if (field === 'registrazione' && typeof value === 'number' && !formData.progressivo.trim()) {
+      try {
+        const progressivoGenerato = await generaProgressivoAutomatico(value);
+        if (progressivoGenerato) {
+          setFormData(prev => ({
+            ...prev,
+            [field]: value,
+            progressivo: progressivoGenerato
+          }));
+          toast.success('Progressivo generato automaticamente');
+          return;
+        }
+      } catch (error) {
+        console.error('Errore generazione progressivo:', error);
+        // Continua con l'aggiornamento normale se c'è un errore
+      }
     }
     
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  // Funzione per generare il progressivo automatico
+  const generaProgressivoAutomatico = async (statoId: number): Promise<string> => {
+    try {
+      // 1. Controlla se lo stato è "Completata"
+      const statoCompletata = stati.find(stato => 
+        stato.descrizione.toLowerCase().includes('completata')
+      );
+      
+      if (!statoCompletata || statoId !== statoCompletata.id) {
+        return ''; // Non genera progressivo se non è completata
+      }
+
+      // 2. Ottieni l'anno corrente
+      const annoCorrente = new Date().getFullYear();
+
+      // 3. Recupera il codice APE dai parametri azienda
+      const { data: parametriData, error: parametriError } = await supabase
+        .from('parametri_azienda')
+        .select('codice_ape')
+        .limit(1);
+
+      if (parametriError) {
+        console.error('Errore caricamento parametri azienda:', parametriError);
+        throw new Error('Impossibile recuperare il codice APE');
+      }
+
+      const codiceApe = parametriData?.[0]?.codice_ape || 'APE';
+
+      // 4. Calcola il prossimo numero progressivo per l'anno corrente
+      const { data: praticheDellAnno, error: praticheError } = await supabase
+        .from('ape')
+        .select('progressivo')
+        .eq('user_id', user?.id)
+        .not('progressivo', 'is', null)
+        .like('progressivo', `${annoCorrente}-${codiceApe}-%`);
+
+      if (praticheError) {
+        console.error('Errore recupero pratiche anno:', praticheError);
+        throw new Error('Errore nel calcolo del progressivo');
+      }
+
+      // Estrai i numeri progressivi esistenti
+      let numeroProgressivo = 1;
+      if (praticheDellAnno && praticheDellAnno.length > 0) {
+        const numeriEsistenti = praticheDellAnno
+          .map(p => {
+            const match = p.progressivo?.match(new RegExp(`^${annoCorrente}-${codiceApe}-(\\d+)$`));
+            return match ? parseInt(match[1]) : 0;
+          })
+          .filter(n => n > 0);
+        
+        if (numeriEsistenti.length > 0) {
+          numeroProgressivo = Math.max(...numeriEsistenti) + 1;
+        }
+      }
+
+      // 5. Genera il progressivo finale: anno-codiceAPE-numero
+      return `${annoCorrente}-${codiceApe}-${numeroProgressivo.toString().padStart(3, '0')}`;
+
+    } catch (error) {
+      console.error('Errore generazione progressivo:', error);
+      toast.error('Errore nella generazione del progressivo automatico');
+      return '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,6 +215,14 @@ export const ApePage: React.FC = () => {
     setSubmitting(true);
 
     try {
+      // Verifica se dobbiamo generare il progressivo automatico
+      let progressivoFinale = formData.progressivo.trim();
+      
+      // Se la registrazione è cambiata a "Completata" e non c'è già un progressivo
+      if (formData.registrazione && !progressivoFinale) {
+        progressivoFinale = await generaProgressivoAutomatico(formData.registrazione);
+      }
+
       const dataToSubmit = {
         committente: formData.committente.trim(),
         proprieta: formData.proprieta.trim() || null,
@@ -139,7 +232,7 @@ export const ApePage: React.FC = () => {
         telefono: formData.telefono.trim() || null,
         note: formData.note.trim() || null,
         registrazione: formData.registrazione || null,
-        progressivo: formData.progressivo.trim() || null,
+        progressivo: progressivoFinale || null,
         pagamento: formData.pagamento,
         user_id: user?.id
       };
@@ -161,7 +254,11 @@ export const ApePage: React.FC = () => {
           return;
         }
 
-        toast.success('Pratica APE modificata con successo');
+        if (progressivoFinale && !formData.progressivo.trim()) {
+          toast.success('Pratica APE modificata e progressivo generato automaticamente');
+        } else {
+          toast.success('Pratica APE modificata con successo');
+        }
       } else {
         // Creazione
         const { error } = await supabase
@@ -174,7 +271,11 @@ export const ApePage: React.FC = () => {
           return;
         }
 
-        toast.success('Pratica APE creata con successo');
+        if (progressivoFinale && !formData.progressivo.trim()) {
+          toast.success('Pratica APE creata e progressivo generato automaticamente');
+        } else {
+          toast.success('Pratica APE creata con successo');
+        }
       }
 
       closeModal();
@@ -187,11 +288,51 @@ export const ApePage: React.FC = () => {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (customFilters?: {
+    searchTerm?: string;
+    filtroStato?: string;
+    filtriAttivi?: typeof filtriAttivi;
+    page?: number;
+    perPage?: number;
+  }) => {
     try {
       setLoading(true);
       
-      // Carica pratiche APE con relazioni
+      // Usa i filtri personalizzati o quelli dello stato corrente
+      const currentSearchTerm = customFilters?.searchTerm ?? searchTerm;
+      const currentFiltroStato = customFilters?.filtroStato ?? filtroStato;
+      const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
+      const currentPageParam = customFilters?.page ?? currentPage;
+      const currentPerPage = customFilters?.perPage ?? recordsPerPage;
+      
+      // Prima query per contare il totale dei record
+      let countQuery = supabase
+        .from('ape')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user?.id);
+
+      // Applica filtri al conteggio
+      if (currentSearchTerm) {
+        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%`);
+      }
+
+      if (currentFiltroStato) {
+        countQuery = countQuery.eq('registrazione', parseInt(currentFiltroStato));
+      }
+
+      if (currentFiltriAttivi.soloNonPagate) {
+        countQuery = countQuery.eq('pagamento', false);
+      }
+
+      const { count, error: countError } = await countQuery;
+      
+      if (countError) {
+        console.error('Errore nel conteggio:', countError);
+      } else {
+        setTotalRecords(count || 0);
+      }
+      
+      // Query principale con paginazione
       let query = supabase
         .from('ape')
         .select(`
@@ -202,30 +343,22 @@ export const ApePage: React.FC = () => {
         .order('created_at', { ascending: false });
 
       // Applica filtri
-      if (searchTerm) {
-        query = query.or(`committente.ilike.%${searchTerm}%,proprieta.ilike.%${searchTerm}%,indirizzo.ilike.%${searchTerm}%,progressivo.ilike.%${searchTerm}%`);
+      if (currentSearchTerm) {
+        query = query.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%`);
       }
 
-      if (dataDa) {
-        query = query.gte('created_at', dataDa);
+      if (currentFiltroStato) {
+        query = query.eq('registrazione', parseInt(currentFiltroStato));
       }
 
-      if (dataA) {
-        query = query.lte('created_at', dataA + 'T23:59:59.999Z');
-      }
-
-      if (filtroStato) {
-        query = query.eq('registrazione', parseInt(filtroStato));
-      }
-
-      if (filtriAttivi.soloNonPagate) {
+      if (currentFiltriAttivi.soloNonPagate) {
         query = query.eq('pagamento', false);
       }
 
-      if (filtriAttivi.completateNonPagate) {
-        // Assumiamo che "completate" significhi che hanno uno stato di registrazione diverso da null/vuoto
-        query = query.not('registrazione', 'is', null).eq('pagamento', false);
-      }
+      // Applica paginazione
+      const from = (currentPageParam - 1) * currentPerPage;
+      const to = from + currentPerPage - 1;
+      query = query.range(from, to);
 
       const { data: praticheData, error: praticheError } = await query;
 
@@ -239,7 +372,7 @@ export const ApePage: React.FC = () => {
       const { data: statiData, error: statiError } = await supabase
         .from('stati_ape')
         .select('*')
-        .order('ordinamento');
+        .order('id');
 
       if (statiError) {
         console.error('Errore caricamento stati APE:', statiError);
@@ -267,10 +400,64 @@ export const ApePage: React.FC = () => {
   };
 
   const handleFilterToggle = (filterName: keyof typeof filtriAttivi) => {
-    setFiltriAttivi(prev => ({
-      ...prev,
-      [filterName]: !prev[filterName]
-    }));
+    const newFiltriAttivi = {
+      ...filtriAttivi,
+      [filterName]: !filtriAttivi[filterName]
+    };
+    
+    setFiltriAttivi(newFiltriAttivi);
+    setCurrentPage(1); // Reset alla prima pagina quando cambiano i filtri
+    
+    // Trigger automatico della ricerca con i nuovi filtri
+    fetchData({
+      filtriAttivi: newFiltriAttivi,
+      page: 1
+    });
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    fetchData({ page });
+  };
+
+  const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
+    setRecordsPerPage(newRecordsPerPage);
+    setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
+    fetchData({ 
+      perPage: newRecordsPerPage,
+      page: 1
+    });
+  };
+
+  const getTotalPages = () => {
+    return Math.ceil(totalRecords / recordsPerPage);
+  };
+
+  const handleTogglePagamento = async (pratica: Ape) => {
+    try {
+      const nuovoPagamento = !pratica.pagamento;
+      
+      const { error } = await supabase
+        .from('ape')
+        .update({ 
+          pagamento: nuovoPagamento,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', pratica.id)
+        .eq('user_id', user?.id);
+
+      if (error) {
+        console.error('Errore aggiornamento pagamento:', error);
+        toast.error('Errore nell\'aggiornamento del pagamento');
+        return;
+      }
+
+      toast.success(nuovoPagamento ? 'Pagamento marcato come effettuato' : 'Pagamento marcato come non effettuato');
+      fetchData();
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nell\'aggiornamento del pagamento');
+    }
   };
 
   const handleDeletePratica = async (id: number) => {
@@ -299,33 +486,56 @@ export const ApePage: React.FC = () => {
   };
 
   const getStatoStyle = (stato: StatoApe | undefined) => {
-    if (!stato) return 'bg-gray-100 text-gray-800';
+    if (!stato) {
+      return {
+        backgroundColor: '#f3f4f6',
+        color: '#374151'
+      };
+    }
     
-    // Mappiamo i colori comuni a classi Tailwind
-    const colorMap: { [key: string]: string } = {
-      '#10b981': 'bg-green-500 text-white',
-      '#22c55e': 'bg-green-500 text-white', 
-      '#ef4444': 'bg-red-500 text-white',
-      '#f59e0b': 'bg-yellow-500 text-white',
-      '#3b82f6': 'bg-blue-500 text-white',
-      '#8b5cf6': 'bg-purple-500 text-white',
-      '#06b6d4': 'bg-cyan-500 text-white',
-      '#84cc16': 'bg-lime-500 text-white',
-      'green': 'bg-green-500 text-white',
-      'red': 'bg-red-500 text-white',
-      'blue': 'bg-blue-500 text-white',
-      'yellow': 'bg-yellow-500 text-white',
-      'purple': 'bg-purple-500 text-white',
+    // Utilizza direttamente il colore dal database
+    const backgroundColor = stato.colore || '#6b7280';
+    
+    // Calcola automaticamente il colore del testo in base alla luminosità del background
+    const getTextColor = (bgColor: string) => {
+      // Rimuovi il # se presente
+      const hex = bgColor.replace('#', '');
+      
+      // Converti in RGB
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      
+      // Calcola la luminosità
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      
+      // Restituisci bianco per sfondi scuri, nero per sfondi chiari
+      return luminance > 0.5 ? '#000000' : '#ffffff';
     };
     
-    return colorMap[stato.colore] || 'bg-gray-500 text-white';
+    return {
+      backgroundColor,
+      color: getTextColor(backgroundColor)
+    };
   };
 
-  const renderCheckIcon = (value: boolean) => {
-    return value ? (
-      <Check className="w-4 h-4 text-green-600" />
-    ) : (
-      <X className="w-4 h-4 text-gray-400" />
+  const renderPagamentoToggle = (pratica: Ape) => {
+    return (
+      <button
+        onClick={() => handleTogglePagamento(pratica)}
+        className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 hover:scale-110 ${
+          pratica.pagamento 
+            ? 'bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50' 
+            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
+        }`}
+        title={pratica.pagamento ? 'Marcato come pagato - Clicca per rimuovere' : 'Non pagato - Clicca per marcare come pagato'}
+      >
+        {pratica.pagamento ? (
+          <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+        ) : (
+          <X className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+        )}
+      </button>
     );
   };
 
@@ -352,8 +562,8 @@ export const ApePage: React.FC = () => {
 
       {/* Filtri */}
       <div className="card space-y-4 dark:bg-gray-800 dark:border-gray-700">
-        {/* Prima riga - Ricerca, date e dropdown */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Filtri */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Campo di ricerca */}
           <div className="relative">
             <input
@@ -373,35 +583,20 @@ export const ApePage: React.FC = () => {
             </button>
           </div>
 
-          {/* Data Da */}
-          <div className="relative">
-            <input
-              type="date"
-              value={dataDa}
-              onChange={(e) => setDataDa(e.target.value)}
-              placeholder="gg/mm/aaaa"
-              className="input pr-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            />
-            <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-          </div>
-
-          {/* Data A */}
-          <div className="relative">
-            <input
-              type="date"
-              value={dataA}
-              onChange={(e) => setDataA(e.target.value)}
-              placeholder="gg/mm/aaaa"
-              className="input pr-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            />
-            <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-          </div>
-
           {/* Filtro Stati APE */}
           <div className="relative">
             <select
               value={filtroStato}
-              onChange={(e) => setFiltroStato(e.target.value)}
+              onChange={(e) => {
+                const newFiltroStato = e.target.value;
+                setFiltroStato(newFiltroStato);
+                setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
+                // Trigger automatico della ricerca con il nuovo stato
+                fetchData({
+                  filtroStato: newFiltroStato,
+                  page: 1
+                });
+              }}
               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">-- Tutti gli stati APE --</option>
@@ -413,59 +608,34 @@ export const ApePage: React.FC = () => {
             </select>
             <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
           </div>
-        </div>
 
-        {/* Seconda riga - Filtri toggle */}
-        <div className="flex flex-wrap gap-4">
-          <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-            filtriAttivi.soloNonPagate 
-              ? 'bg-blue-600 text-white shadow-md' 
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-          }`}>
-            <input
-              type="checkbox"
-              checked={filtriAttivi.soloNonPagate}
-              onChange={() => handleFilterToggle('soloNonPagate')}
-              className="sr-only"
-            />
-            <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
+          {/* Filtro Non pagate */}
+          <div className="flex items-center">
+            <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 w-full justify-center ${
               filtriAttivi.soloNonPagate 
-                ? 'border-white bg-white' 
-                : 'border-gray-400 dark:border-gray-500 bg-transparent'
+                ? 'bg-blue-600 text-white shadow-md' 
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}>
-              {filtriAttivi.soloNonPagate && (
-                <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              )}
-            </div>
-            <span className="text-sm font-medium">Solo non pagate</span>
-          </label>
-
-          <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-            filtriAttivi.completateNonPagate 
-              ? 'bg-green-600 text-white shadow-md' 
-              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-          }`}>
-            <input
-              type="checkbox"
-              checked={filtriAttivi.completateNonPagate}
-              onChange={() => handleFilterToggle('completateNonPagate')}
-              className="sr-only"
-            />
-            <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
-              filtriAttivi.completateNonPagate 
-                ? 'border-white bg-white' 
-                : 'border-gray-400 dark:border-gray-500 bg-transparent'
-            }`}>
-              {filtriAttivi.completateNonPagate && (
-                <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              )}
-            </div>
-            <span className="text-sm font-medium">Completate non pagate</span>
-          </label>
+              <input
+                type="checkbox"
+                checked={filtriAttivi.soloNonPagate}
+                onChange={() => handleFilterToggle('soloNonPagate')}
+                className="sr-only"
+              />
+              <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
+                filtriAttivi.soloNonPagate 
+                  ? 'border-white bg-white' 
+                  : 'border-gray-400 dark:border-gray-500 bg-transparent'
+              }`}>
+                {filtriAttivi.soloNonPagate && (
+                  <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-sm font-medium">Non pagate</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -532,7 +702,10 @@ export const ApePage: React.FC = () => {
                 {pratiche.map((pratica) => (
                   <tr key={pratica.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(pratica.registrazione_info)}`}>
+                      <span 
+                        className="inline-flex px-2 py-1 text-xs font-semibold rounded"
+                        style={getStatoStyle(pratica.registrazione_info)}
+                      >
                         {pratica.registrazione_info?.descrizione || 'N/A'}
                       </span>
                     </td>
@@ -561,7 +734,7 @@ export const ApePage: React.FC = () => {
                       {pratica.progressivo || '-'}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {renderCheckIcon(pratica.pagamento)}
+                      {renderPagamentoToggle(pratica)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                       {formatDate(pratica.created_at)}
@@ -589,6 +762,112 @@ export const ApePage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          
+          {/* Controlli Paginazione */}
+          {pratiche.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                {/* Info record */}
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Mostrando {Math.min((currentPage - 1) * recordsPerPage + 1, totalRecords)} - {Math.min(currentPage * recordsPerPage, totalRecords)} di {totalRecords} pratiche
+                </div>
+                
+                {/* Controlli centrali */}
+                <div className="flex items-center gap-4">
+                  {/* Selezione record per pagina */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">Record:</span>
+                    <select
+                      value={recordsPerPage}
+                      onChange={(e) => handleRecordsPerPageChange(parseInt(e.target.value))}
+                      className="input py-1 px-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value={200}>200</option>
+                    </select>
+                  </div>
+                  
+                  {/* Controlli navigazione */}
+                  {getTotalPages() > 1 && (
+                    <div className="flex items-center gap-2">
+                      {/* Prima pagina */}
+                      <button
+                        onClick={() => handlePageChange(1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                      >
+                        ««
+                      </button>
+                      
+                      {/* Pagina precedente */}
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                      >
+                        ‹
+                      </button>
+                      
+                      {/* Numeri pagina */}
+                      {Array.from({ length: Math.min(5, getTotalPages()) }, (_, i) => {
+                        let pageNum;
+                        if (getTotalPages() <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= getTotalPages() - 2) {
+                          pageNum = getTotalPages() - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`px-3 py-1 text-sm border rounded ${
+                              currentPage === pageNum
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 dark:text-gray-300'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                      
+                      {/* Pagina successiva */}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === getTotalPages()}
+                        className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                      >
+                        ›
+                      </button>
+                      
+                      {/* Ultima pagina */}
+                      <button
+                        onClick={() => handlePageChange(getTotalPages())}
+                        disabled={currentPage === getTotalPages()}
+                        className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-300"
+                      >
+                        »»
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Info pagine */}
+                {getTotalPages() > 1 && (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Pagina {currentPage} di {getTotalPages()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -719,13 +998,16 @@ export const ApePage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Progressivo
+                    {formData.progressivo && formData.registrazione && stati.find(s => s.id === formData.registrazione && s.descrizione.toLowerCase().includes('completata')) && (
+                      <span className="ml-2 text-xs text-green-600 dark:text-green-400">(generato automaticamente)</span>
+                    )}
                   </label>
                   <input
                     type="text"
                     value={formData.progressivo}
                     onChange={(e) => handleInputChange('progressivo', e.target.value)}
                     className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    placeholder="Numero progressivo"
+                    placeholder="Sarà generato automaticamente quando 'Completata'"
                   />
                 </div>
               </div>
