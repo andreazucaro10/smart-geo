@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, X, Phone, Mail, Edit, Trash2, User, Building } from 'lucide-react';
 import { supabase } from '../services/supabase';
-import { useAuthStore } from '../store/authStore';
 import type { Rubrica as RubricaType, TipologiaContatto, TipologiaAppartenenza } from '../types';
 import toast from 'react-hot-toast';
 
@@ -26,7 +25,6 @@ export const Rubrica: React.FC = () => {
     disattivato: false
   });
   const [submitting, setSubmitting] = useState(false);
-  const { user } = useAuthStore();
 
   const fetchTipologie = async () => {
     try {
