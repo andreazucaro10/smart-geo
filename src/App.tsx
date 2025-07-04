@@ -11,6 +11,7 @@ import { FattureNonContabilizzate } from './pages/FattureNonContabilizzate';
 import { Spese } from './pages/Spese';
 import { ComuneCatastoPage } from './pages/ComuneCatasto';
 import { ApePage } from './pages/Ape';
+import { VariePage } from './pages/Varie';
 import { Parametri } from './pages/Parametri';
 import { Planner } from './pages/Planner';
 import { Rubrica } from './pages/Rubrica';
@@ -48,15 +49,7 @@ function App() {
             <Route path="spese" element={<Spese />} />
             <Route path="comune-catasto" element={<ComuneCatastoPage />} />
             <Route path="ape" element={<ApePage />} />
-            <Route 
-              path="varie" 
-              element={
-                <div className="text-center py-12">
-                  <h1 className="text-2xl font-bold text-gray-900">Varie</h1>
-                  <p className="text-gray-600 mt-2">Pagina in sviluppo</p>
-                </div>
-              } 
-            />
+            <Route path="varie" element={<VariePage />} />
             <Route path="rubrica" element={<Rubrica />} />
             <Route path="parametri" element={<Parametri />} />
           </Route>
