@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Menu, User, LogOut, Settings, Bell, Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -9,6 +9,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const { user, signOut } = useAuthStore();
   const { isDark, toggleTheme } = useThemeStore();
 
@@ -16,6 +17,28 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
     await signOut();
     setUserMenuOpen(false);
   };
+
+  const handleUserMenuToggle = () => {
+    if (userMenuOpen) {
+      // Start fade out animation
+      setIsAnimatingOut(true);
+    } else {
+      // Open menu
+      setUserMenuOpen(true);
+      setIsAnimatingOut(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAnimatingOut) {
+      const timer = setTimeout(() => {
+        setUserMenuOpen(false);
+        setIsAnimatingOut(false);
+      }, 200); // Match animation duration
+
+      return () => clearTimeout(timer);
+    }
+  }, [isAnimatingOut]);
 
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 py-2 transition-colors min-h-[3.5rem] max-h-[3.5rem]">
@@ -50,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
           {/* User Menu */}
           <div className="relative">
             <button
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              onClick={handleUserMenuToggle}
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors max-w-[200px]"
             >
               <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
@@ -72,11 +95,13 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
                 {/* Backdrop */}
                 <div 
                   className="fixed inset-0 z-10"
-                  onClick={() => setUserMenuOpen(false)}
+                  onClick={handleUserMenuToggle}
                 />
                 
                 {/* Menu */}
-                <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20">
+                <div className={`absolute right-0 mt-1 w-52 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-20 ${
+                  isAnimatingOut ? 'animate-fade-out-up' : 'animate-fade-in-down'
+                }`}>
                   <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                       {user?.username || 'Utente'}
@@ -116,4 +141,4 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
       </div>
     </header>
   );
-}; 
+};
