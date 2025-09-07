@@ -39,9 +39,14 @@ export const FattureNonContabilizzate: React.FC = () => {
   const [totalRecords, setTotalRecords] = useState(0);
   
   // Totalizzatori
-  const [totals, setTotals] = useState({
+  const [totals, setTotals] = useState<{
+    totale: number;
+    spese: number;
+    netProfit: number;
+  }>({
     totale: 0,
-    spese: 0
+    spese: 0,
+    netProfit: 0
   });
   
   const { user } = useAuthStore();
@@ -121,10 +126,12 @@ export const FattureNonContabilizzate: React.FC = () => {
       // Calcola i totali
       const totaleTotale = (data || []).reduce((sum, fattura) => sum + fattura.totale, 0);
       const totaleSpese = (data || []).reduce((sum, fattura) => sum + fattura.spese, 0);
-      
+      const totaleNetProfit = totaleTotale - totaleSpese;
+
       setTotals({
         totale: totaleTotale,
-        spese: totaleSpese
+        spese: totaleSpese,
+        netProfit: totaleNetProfit
       });
 
     } catch (error) {
@@ -469,6 +476,9 @@ export const FattureNonContabilizzate: React.FC = () => {
                   Spese (€)
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Guadagno netto (€)
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Note
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -479,7 +489,7 @@ export const FattureNonContabilizzate: React.FC = () => {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Caricamento...</span>
@@ -488,7 +498,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                 </tr>
               ) : fatture.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nessuna fattura trovata
                   </td>
                 </tr>
@@ -506,6 +516,9 @@ export const FattureNonContabilizzate: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {formatCurrency(fattura.spese)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 dark:text-blue-400">
+                      {formatCurrency(fattura.totale - fattura.spese)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
                       {fattura.note || '-'}
@@ -545,6 +558,9 @@ export const FattureNonContabilizzate: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-gray-100">
                     {formatCurrency(totals.spese)}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-bold text-blue-700 dark:text-blue-400">
+                    {formatCurrency(totals.netProfit)}
                   </td>
                   <td className="px-6 py-4"></td>
                   <td className="px-6 py-4"></td>

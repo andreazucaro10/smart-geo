@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Menu, User, LogOut, Settings, Bell, Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
@@ -8,6 +9,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
+  const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const { user, signOut } = useAuthStore();
@@ -120,7 +122,10 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }: HeaderProps) => {
                       {isDark ? 'Modalità chiara' : 'Modalità scura'}
                     </button>
                     
-                    <button className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <button
+                      onClick={() => navigate('/user-settings')}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
                       <Settings className="w-3.5 h-3.5" />
                       Impostazioni
                     </button>

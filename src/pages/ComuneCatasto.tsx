@@ -12,6 +12,7 @@ export const ComuneCatastoPage: React.FC = () => {
   const [stati, setStati] = useState<StatoGenerale[]>([]);
   const [tipiIncarico, setTipiIncarico] = useState<TipoIncarico[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroTipoIncarico, setFiltroTipoIncarico] = useState('');
@@ -26,15 +27,21 @@ export const ComuneCatastoPage: React.FC = () => {
   const [recordsPerPage, setRecordsPerPage] = useState(25);
   const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
   const [editingPratica, setEditingPratica] = useState<ComuneCatasto | null>(null);
+  const [duplicatingPratica, setDuplicatingPratica] = useState<ComuneCatasto | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [newStatus, setNewStatus] = useState<string>('');
+  const [confirmStatusChange, setConfirmStatusChange] = useState(false);
   const [formData, setFormData] = useState({
     committente: '',
     stato: '',
     proprieta: '',
+    proprieta2: '',
     indirizzo: '',
     citta: '',
     telefono: '',
+    telefono2: '',
     mail: '',
     tipo_incarico: '',
     comune: false,
@@ -164,7 +171,7 @@ export const ComuneCatastoPage: React.FC = () => {
 
       // Applica filtri al conteggio
       if (currentSearchTerm) {
-        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%`);
+        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%`);
       }
 
       if (currentFiltroStato) {
@@ -212,11 +219,12 @@ export const ComuneCatastoPage: React.FC = () => {
           tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto)
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order('stato', { ascending: true })
+        .order('committente', { ascending: true });
 
       // Applica filtri
       if (currentSearchTerm) {
-        query = query.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%`);
+        query = query.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%`);
       }
 
       if (currentFiltroStato) {
@@ -294,6 +302,7 @@ export const ComuneCatastoPage: React.FC = () => {
   }, [user?.id]);
 
   const handleSearch = () => {
+    setSelectedRows(new Set()); // Resetta la selezione quando si effettua una ricerca
     fetchData();
   };
 
@@ -315,13 +324,15 @@ export const ComuneCatastoPage: React.FC = () => {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    setSelectedRows(new Set()); // Resetta la selezione quando si cambia pagina
     fetchData({ page });
   };
 
   const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
     setRecordsPerPage(newRecordsPerPage);
     setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
-    fetchData({ 
+    setSelectedRows(new Set()); // Resetta la selezione quando si cambia il numero di record
+    fetchData({
       perPage: newRecordsPerPage,
       page: 1
     });
@@ -479,6 +490,13 @@ export const ComuneCatastoPage: React.FC = () => {
         return;
       }
 
+      // Rimuovi l'ID dalla selezione se la pratica eliminata era selezionata
+      setSelectedRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+
       toast.success('Pratica eliminata con successo');
       fetchData();
     } catch (error) {
@@ -505,6 +523,46 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
+  const formatTelefono2 = (value: string): string => {
+    // Rimuove tutti i caratteri non numerici
+    const numericValue = value.replace(/\D/g, '');
+    
+    // Limita a 10 cifre
+    const limitedValue = numericValue.slice(0, 10);
+    
+    // Applica la formattazione XXX XXX XXXX
+    if (limitedValue.length <= 3) {
+      return limitedValue;
+    } else if (limitedValue.length <= 6) {
+      return `${limitedValue.slice(0, 3)} ${limitedValue.slice(3)}`;
+    } else {
+      return `${limitedValue.slice(0, 3)} ${limitedValue.slice(3, 6)} ${limitedValue.slice(6)}`;
+    }
+  };
+
+  const handleRowSelection = (id: number) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+
+  const handleSelectAll = () => {
+    if (selectedRows.size === pratiche.length) {
+      // Se tutte le righe sono selezionate, deseleziona tutto
+      setSelectedRows(new Set());
+    } else {
+      // Altrimenti seleziona tutte le righe della pagina corrente
+      setSelectedRows(new Set(pratiche.map(pratica => pratica.id)));
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     // Protezione contro eventi malformati da estensioni
     if (!e || !e.target) {
@@ -525,6 +583,11 @@ export const ComuneCatastoPage: React.FC = () => {
     // Formatta il telefono se è il campo telefono
     if (name === 'telefono' && type !== 'checkbox') {
       processedValue = formatTelefono(value);
+    }
+    
+    // Formatta il telefono2 se è il campo telefono2
+    if (name === 'telefono2' && type !== 'checkbox') {
+      processedValue = formatTelefono2(value);
     }
 
     setFormData(prev => ({
@@ -558,9 +621,11 @@ export const ComuneCatastoPage: React.FC = () => {
           committente: formData.committente,
           stato: dataToSave.stato || undefined,
           proprieta: formData.proprieta,
+          proprieta2: formData.proprieta2,
           indirizzo: formData.indirizzo,
           citta: formData.citta,
           telefono: formData.telefono,
+          telefono2: formData.telefono2,
           mail: formData.mail,
           tipo_incarico: dataToSave.tipo_incarico || undefined,
           comune: formData.comune,
@@ -639,16 +704,39 @@ export const ComuneCatastoPage: React.FC = () => {
   };
 
   const openModal = (pratica?: ComuneCatasto) => {
-    if (pratica) {
+    if (duplicatingPratica) {
+      // Modalità duplicazione
+      setEditingPratica(null);
+      setFormData({
+        committente: duplicatingPratica.committente,
+        stato: duplicatingPratica.stato?.toString() || '',
+        proprieta: duplicatingPratica.proprieta || '',
+        proprieta2: duplicatingPratica.proprieta2 || '',
+        indirizzo: duplicatingPratica.indirizzo || '',
+        citta: duplicatingPratica.citta || '',
+        telefono: duplicatingPratica.telefono || '',
+        telefono2: duplicatingPratica.telefono2 || '',
+        mail: duplicatingPratica.mail || '',
+        tipo_incarico: duplicatingPratica.tipo_incarico?.toString() || '',
+        comune: duplicatingPratica.comune,
+        catasto: duplicatingPratica.catasto,
+        fine_lavori: duplicatingPratica.fine_lavori,
+        pagamento: duplicatingPratica.pagamento,
+        note: duplicatingPratica.note || ''
+      });
+      setDuplicatingPratica(null);
+    } else if (pratica) {
       // Modalità modifica
       setEditingPratica(pratica);
       setFormData({
         committente: pratica.committente,
         stato: pratica.stato?.toString() || '',
         proprieta: pratica.proprieta || '',
+        proprieta2: pratica.proprieta2 || '',
         indirizzo: pratica.indirizzo || '',
         citta: pratica.citta || '',
         telefono: pratica.telefono || '',
+        telefono2: pratica.telefono2 || '',
         mail: pratica.mail || '',
         tipo_incarico: pratica.tipo_incarico?.toString() || '',
         comune: pratica.comune,
@@ -664,9 +752,11 @@ export const ComuneCatastoPage: React.FC = () => {
         committente: '',
         stato: '',
         proprieta: '',
+        proprieta2: '',
         indirizzo: '',
         citta: '',
         telefono: '',
+        telefono2: '',
         mail: '',
         tipo_incarico: '',
         comune: false,
@@ -686,9 +776,11 @@ export const ComuneCatastoPage: React.FC = () => {
       committente: '',
       stato: '',
       proprieta: '',
+      proprieta2: '',
       indirizzo: '',
       citta: '',
       telefono: '',
+      telefono2: '',
       mail: '',
       tipo_incarico: '',
       comune: false,
@@ -780,11 +872,11 @@ export const ComuneCatastoPage: React.FC = () => {
         className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 ${
           enabled ? 'hover:scale-110' : ''
         } ${
-          value 
-            ? 'bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50' 
+          value
+            ? 'bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50'
             : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600'
         } ${
-          !enabled ? 'opacity-50' : ''
+          !enabled ? 'opacity-30 cursor-not-allowed border-2 border-dashed border-gray-300 dark:border-gray-600' : ''
         }`}
       >
         {value ? (
@@ -1018,12 +1110,71 @@ export const ComuneCatastoPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Sezione azioni multiple (appare solo quando ci sono righe selezionate) */}
+      {selectedRows.size > 0 && (
+        <div className="card bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400">
+          <div className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                {selectedRows.size} righe selezionate
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="btn btn-secondary flex items-center gap-2"
+                  onClick={() => {
+                    setShowStatusModal(true);
+                    setConfirmStatusChange(false);
+                  }}
+                >
+                  Cambia stato
+                </button>
+                <button
+                  className="btn btn-primary flex items-center gap-2"
+                  disabled={selectedRows.size !== 1}
+                  onClick={() => {
+                    const selectedPratica = pratiche.find(p => selectedRows.has(p.id));
+                    if (selectedPratica) {
+                      setDuplicatingPratica(selectedPratica);
+                      openModal();
+                    }
+                  }}
+                >
+                  Duplica pratica
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabella */}
       <div className="card p-0 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  <label className="flex items-center justify-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.size === pratiche.length && pratiche.length > 0}
+                      onChange={handleSelectAll}
+                      className="sr-only"
+                      title={selectedRows.size === pratiche.length ? "Deseleziona tutto" : "Seleziona tutto"}
+                    />
+                    <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
+                      selectedRows.size === pratiche.length && pratiche.length > 0
+                        ? 'border-blue-600 bg-blue-600 dark:border-blue-400 dark:bg-blue-400'
+                        : 'border-gray-300 dark:border-gray-600 bg-transparent'
+                    }`}>
+                      {selectedRows.size === pratiche.length && pratiche.length > 0 && (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </label>
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Stato
                 </th>
@@ -1037,10 +1188,16 @@ export const ComuneCatastoPage: React.FC = () => {
                   Città
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Proprietario
+                  Proprietà
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Proprietà 2
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Telefono
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Telefono 2
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Mail
@@ -1071,7 +1228,7 @@ export const ComuneCatastoPage: React.FC = () => {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={16} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Caricamento...</span>
@@ -1080,15 +1237,36 @@ export const ComuneCatastoPage: React.FC = () => {
                 </tr>
               ) : pratiche.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={16} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nessuna pratica trovata
                   </td>
                 </tr>
               ) : (
                 pratiche.map((pratica) => (
                   <tr key={pratica.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-4 py-3 text-center">
+                      <label className="flex items-center justify-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.has(pratica.id)}
+                          onChange={() => handleRowSelection(pratica.id)}
+                          className="sr-only"
+                        />
+                        <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${
+                          selectedRows.has(pratica.id)
+                            ? 'border-blue-600 bg-blue-600 dark:border-blue-400 dark:bg-blue-400'
+                            : 'border-gray-300 dark:border-gray-600 bg-transparent'
+                        }`}>
+                          {selectedRows.has(pratica.id) && (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                      </label>
+                    </td>
                     <td className="px-4 py-3">
-                      <span 
+                      <span
                         className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(pratica.stato_info)}`}
                         style={{ backgroundColor: getStatoBackgroundColor(pratica.stato_info) }}
                       >
@@ -1108,7 +1286,13 @@ export const ComuneCatastoPage: React.FC = () => {
                       {pratica.proprieta || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                      {pratica.proprieta2 || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                       {pratica.telefono || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                      {pratica.telefono2 || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                       {pratica.mail || '-'}
@@ -1383,7 +1567,22 @@ export const ComuneCatastoPage: React.FC = () => {
                       name="proprieta"
                       value={formData.proprieta}
                       onChange={handleInputChange}
-                      placeholder="Nome proprietario"
+                      placeholder="Nome proprietà"
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    />
+                  </div>
+
+                  {/* Proprietà 2 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Proprietà 2
+                    </label>
+                    <input
+                      type="text"
+                      name="proprieta2"
+                      value={formData.proprieta2}
+                      onChange={handleInputChange}
+                      placeholder="Nome secondo proprietario"
                       className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                     />
                   </div>
@@ -1427,6 +1626,21 @@ export const ComuneCatastoPage: React.FC = () => {
                       type="tel"
                       name="telefono"
                       value={formData.telefono}
+                      onChange={handleInputChange}
+                      placeholder="XXX XXX XXXX"
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    />
+                  </div>
+
+                  {/* Telefono 2 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Telefono 2
+                    </label>
+                    <input
+                      type="tel"
+                      name="telefono2"
+                      value={formData.telefono2}
                       onChange={handleInputChange}
                       placeholder="XXX XXX XXXX"
                       className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
@@ -1478,10 +1692,10 @@ export const ComuneCatastoPage: React.FC = () => {
                   <div className="space-y-4">
                                           <div className="grid grid-cols-2 gap-4">
                         <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
-                          !isFlagAbilitato('comune') 
-                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' 
-                            : formData.comune 
-                              ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-500 text-purple-700 dark:text-purple-300 cursor-pointer' 
+                          !isFlagAbilitato('comune')
+                            ? 'opacity-30 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 border-dashed'
+                            : formData.comune
+                              ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-500 text-purple-700 dark:text-purple-300 cursor-pointer'
                               : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
                           <input
@@ -1507,10 +1721,10 @@ export const ComuneCatastoPage: React.FC = () => {
                         </label>
 
                         <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
-                          !isFlagAbilitato('catasto') 
-                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' 
-                            : formData.catasto 
-                              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-700 dark:text-indigo-300 cursor-pointer' 
+                          !isFlagAbilitato('catasto')
+                            ? 'opacity-30 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 border-dashed'
+                            : formData.catasto
+                              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-700 dark:text-indigo-300 cursor-pointer'
                               : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
                           <input
@@ -1538,10 +1752,10 @@ export const ComuneCatastoPage: React.FC = () => {
 
                       <div className="grid grid-cols-2 gap-4">
                         <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
-                          !isFlagAbilitato('fine_lavori') 
-                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500' 
-                            : formData.fine_lavori 
-                              ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-300 cursor-pointer' 
+                          !isFlagAbilitato('fine_lavori')
+                            ? 'opacity-30 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 border-dashed'
+                            : formData.fine_lavori
+                              ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-300 cursor-pointer'
                               : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
                         }`}>
                           <input
@@ -1654,6 +1868,135 @@ export const ComuneCatastoPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Cambio Stato */}
+      {showStatusModal && (
+        <div className="modal-overlay">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                {confirmStatusChange ? 'Conferma Cambio Stato' : 'Seleziona Nuovo Stato'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowStatusModal(false);
+                  setConfirmStatusChange(false);
+                  setNewStatus('');
+                }}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {!confirmStatusChange ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Nuovo Stato
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                        className="input w-full pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      >
+                        <option value="">-- Seleziona stato --</option>
+                        {stati.map((stato) => (
+                          <option key={stato.id} value={stato.id.toString()}>
+                            {stato.descrizione}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Selezionando un nuovo stato verranno modificate {selectedRows.size} pratiche.
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStatusModal(false);
+                        setNewStatus('');
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    >
+                      Annulla
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmStatusChange(true)}
+                      disabled={!newStatus}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continua
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <div className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      Conferma Cambio Stato
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      Stai per cambiare lo stato di {selectedRows.size} pratiche a:
+                    </div>
+                    <div className="inline-flex px-4 py-2 text-sm font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      {stati.find(s => s.id.toString() === newStatus)?.descrizione || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmStatusChange(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    >
+                      Indietro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          // Update all selected practices
+                          const updates = Array.from(selectedRows).map(async (id) => {
+                            const { error } = await supabase
+                              .from('comune_catasto')
+                              .update({ stato: parseInt(newStatus) })
+                              .eq('id', id)
+                              .eq('user_id', user?.id);
+
+                            if (error) {
+                              throw error;
+                            }
+                          });
+
+                          await Promise.all(updates);
+                          
+                          toast.success(`Stato modificato per ${selectedRows.size} pratiche`);
+                          setShowStatusModal(false);
+                          setNewStatus('');
+                          setSelectedRows(new Set());
+                          fetchData();
+                        } catch (error) {
+                          console.error('Errore nel cambio stato:', error);
+                          toast.error('Errore nel cambio stato');
+                        }
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                    >
+                      Conferma
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}; 
+};

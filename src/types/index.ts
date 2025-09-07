@@ -74,8 +74,10 @@ export interface ComuneCatasto {
   indirizzo?: string;
   citta?: string;
   proprieta?: string;
+  proprieta2?: string;
   mail?: string;
   telefono?: string;
+  telefono2?: string;
   note?: string;
   comune: boolean;
   catasto: boolean;

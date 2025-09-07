@@ -15,6 +15,7 @@ import { VariePage } from './pages/Varie';
 import { Parametri } from './pages/Parametri';
 import { Planner } from './pages/Planner';
 import { Rubrica } from './pages/Rubrica';
+import { UserSettings } from './pages/UserSettings';
 
 function App() {
   const { initialize } = useAuthStore();
@@ -52,6 +53,7 @@ function App() {
             <Route path="varie" element={<VariePage />} />
             <Route path="rubrica" element={<Rubrica />} />
             <Route path="parametri" element={<Parametri />} />
+            <Route path="user-settings" element={<UserSettings />} />
           </Route>
         </Routes>
 
