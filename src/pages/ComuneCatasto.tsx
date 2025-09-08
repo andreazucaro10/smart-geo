@@ -220,7 +220,7 @@ export const ComuneCatastoPage: React.FC = () => {
         `)
         .eq('user_id', user?.id)
         .order('stato', { ascending: true })
-        .order('committente', { ascending: true });
+        .order('created_at', { ascending: false });
 
       // Applica filtri
       if (currentSearchTerm) {
