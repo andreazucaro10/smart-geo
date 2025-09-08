@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Bell, Moon, Sun } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 
