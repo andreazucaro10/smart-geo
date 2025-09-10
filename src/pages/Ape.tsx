@@ -9,10 +9,12 @@ import toast from 'react-hot-toast';
 interface ApeFormData {
   committente: string;
   proprieta: string;
+  proprieta2: string;
   indirizzo: string;
   citta: string;
   mail: string;
   telefono: string;
+  telefono2: string;
   note: string;
   registrazione: number | null;
   progressivo: string;
@@ -41,10 +43,12 @@ export const ApePage: React.FC = () => {
   const [formData, setFormData] = useState<ApeFormData>({
     committente: '',
     proprieta: '',
+    proprieta2: '',
     indirizzo: '',
     citta: '',
     mail: '',
     telefono: '',
+    telefono2: '',
     note: '',
     registrazione: null,
     progressivo: '',
@@ -114,10 +118,12 @@ export const ApePage: React.FC = () => {
     setFormData({
       committente: '',
       proprieta: '',
+      proprieta2: '',
       indirizzo: '',
       citta: '',
       mail: '',
       telefono: '',
+      telefono2: '',
       note: '',
       registrazione: null,
       progressivo: '',
@@ -135,10 +141,12 @@ export const ApePage: React.FC = () => {
     setFormData({
       committente: pratica.committente || '',
       proprieta: pratica.proprieta || '',
+      proprieta2: pratica.proprieta2 || '',
       indirizzo: pratica.indirizzo || '',
       citta: pratica.citta || '',
       mail: pratica.mail || '',
       telefono: pratica.telefono || '',
+      telefono2: pratica.telefono2 || '',
       note: pratica.note || '',
       registrazione: pratica.registrazione || null,
       progressivo: pratica.progressivo || '',
@@ -170,6 +178,27 @@ export const ApePage: React.FC = () => {
     }
   };
 
+  // Funzione per combinare i telefoni
+  const combineTelefoni = (telefono1: string | null | undefined, telefono2: string | null | undefined): string => {
+    const formatted1 = telefono1 ? formatPhoneNumber(telefono1) : '';
+    const formatted2 = telefono2 ? formatPhoneNumber(telefono2) : '';
+    
+    if (!formatted1 && !formatted2) return '-';
+    if (!formatted2) return formatted1;
+    if (!formatted1) return formatted2;
+    
+    return `${formatted1} / ${formatted2}`;
+  };
+
+  // Funzione per combinare le proprietà
+  const combineProprieta = (proprieta1: string | null | undefined, proprieta2: string | null | undefined): string => {
+    if (!proprieta1 && !proprieta2) return '-';
+    if (!proprieta2) return proprieta1 || '-';
+    if (!proprieta1) return proprieta2 || '-';
+    
+    return `${proprieta1} / ${proprieta2}`;
+  };
+
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     if (!e || !e.target) {
       console.warn('Evento malformato ignorato');
@@ -186,6 +215,10 @@ export const ApePage: React.FC = () => {
     let processedValue = value;
     
     if (name === 'telefono' && type !== 'checkbox') {
+      processedValue = formatPhoneNumber(value);
+    }
+    
+    if (name === 'telefono2' && type !== 'checkbox') {
       processedValue = formatPhoneNumber(value);
     }
 
@@ -305,10 +338,12 @@ export const ApePage: React.FC = () => {
       const dataToSubmit = {
         committente: formData.committente.trim(),
         proprieta: formData.proprieta.trim() || null,
+        proprieta2: formData.proprieta2.trim() || null,
         indirizzo: formData.indirizzo.trim() || null,
         citta: formData.citta.trim() || null,
         mail: formData.mail.trim() || null,
         telefono: formData.telefono.trim() || null,
+        telefono2: formData.telefono2.trim() || null,
         note: formData.note.trim() || null,
         registrazione: formData.registrazione || null,
         progressivo: progressivoFinale || null,
@@ -413,7 +448,7 @@ export const ApePage: React.FC = () => {
 
       // Applica filtri al conteggio
       if (currentSearchTerm) {
-        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%`);
+        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%`);
       }
 
       if (currentFiltroStato) {
@@ -444,11 +479,12 @@ export const ApePage: React.FC = () => {
           registrazione_info:stati_ape(id, descrizione, colore)
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order('registrazione', { ascending: false })
+        .order('progressivo', { ascending: false });
 
       // Applica filtri
       if (currentSearchTerm) {
-        query = query.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%`);
+        query = query.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%`);
       }
 
       if (currentFiltroStato) {
@@ -932,10 +968,10 @@ export const ApePage: React.FC = () => {
                     Città
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Mail
+                    Telefono
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Telefono
+                    Mail
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Note
@@ -969,7 +1005,7 @@ export const ApePage: React.FC = () => {
                       {pratica.committente}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                      {pratica.proprieta || '-'}
+                      {combineProprieta(pratica.proprieta, pratica.proprieta2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                       {pratica.indirizzo || '-'}
@@ -978,10 +1014,10 @@ export const ApePage: React.FC = () => {
                       {pratica.citta || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                      {pratica.mail || '-'}
+                      {combineTelefoni(pratica.telefono, pratica.telefono2)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                      {pratica.telefono || '-'}
+                      {pratica.mail || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
                       {pratica.note || '-'}
@@ -1185,6 +1221,20 @@ export const ApePage: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Proprietà 2
+                    </label>
+                    <input
+                      type="text"
+                      name="proprieta2"
+                      value={formData.proprieta2}
+                      onChange={handleInputChange}
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                      placeholder="Nome secondo proprietario"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Indirizzo
                     </label>
                     <input
@@ -1211,6 +1261,37 @@ export const ApePage: React.FC = () => {
                     />
                   </div>
 
+                  <div className="pt-4">
+                    <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
+                      formData.pagamento
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-300 cursor-pointer'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        name="pagamento"
+                        checked={formData.pagamento}
+                        onChange={handleInputChange}
+                        className="sr-only"
+                      />
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                        formData.pagamento
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                      }`}>
+                        {formData.pagamento && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium">Pagamento</span>
+                    </label>
+                  </div>
+
+                </div>
+
+                <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Telefono
@@ -1224,9 +1305,21 @@ export const ApePage: React.FC = () => {
                       placeholder="XXX XXX XXXX"
                     />
                   </div>
-                </div>
 
-                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Telefono 2
+                    </label>
+                    <input
+                      type="tel"
+                      name="telefono2"
+                      value={formData.telefono2}
+                      onChange={handleInputChange}
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                      placeholder="XXX XXX XXXX"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Email
@@ -1280,33 +1373,6 @@ export const ApePage: React.FC = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
-                      formData.pagamento
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-300 cursor-pointer'
-                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        name="pagamento"
-                        checked={formData.pagamento}
-                        onChange={handleInputChange}
-                        className="sr-only"
-                      />
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
-                        formData.pagamento
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300 dark:border-gray-500 bg-transparent'
-                      }`}>
-                        {formData.pagamento && (
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <span className="text-sm font-medium">Pagamento</span>
-                    </label>
-                  </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

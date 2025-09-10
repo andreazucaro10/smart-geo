@@ -1811,7 +1811,10 @@ export const ComuneCatastoPage: React.FC = () => {
                       className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                     />
                   </div>
+                </div>
 
+                {/* Seconda colonna */}
+                <div className="space-y-4">
                   {/* Telefono */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1841,10 +1844,7 @@ export const ComuneCatastoPage: React.FC = () => {
                       className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                     />
                   </div>
-                </div>
 
-                {/* Seconda colonna */}
-                <div className="space-y-4">
                   {/* Email */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

@@ -96,10 +96,12 @@ export interface Ape {
   id: number;
   committente: string;
   proprieta?: string;
+  proprieta2?: string;
   indirizzo?: string;
   citta?: string;
   mail?: string;
   telefono?: string;
+  telefono2?: string;
   note?: string;
   registrazione?: number;
   progressivo?: string;
@@ -114,10 +116,12 @@ export interface Varie {
   id: number;
   committente: string;
   proprieta?: string;
+  proprieta2?: string;
   indirizzo?: string;
   citta?: string;
   mail?: string;
   telefono?: string;
+  telefono2?: string;
   note?: string;
   registrazione?: number;
   tipo_incarico_id?: number;

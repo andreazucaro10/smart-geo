@@ -25,9 +25,11 @@ export const VariePage: React.FC = () => {
   const [formData, setFormData] = useState({
     committente: '',
     proprieta: '',
+    proprieta2: '',
     indirizzo: '',
     citta: '',
     telefono: '',
+    telefono2: '',
     mail: '',
     registrazione: '',
     pagamento: false,
@@ -123,7 +125,7 @@ export const VariePage: React.FC = () => {
 
       // Applica filtri al conteggio
       if (currentSearchTerm) {
-        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%`);
+        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%`);
       }
 
       if (currentFiltroStato) {
@@ -158,7 +160,7 @@ export const VariePage: React.FC = () => {
 
       // Applica filtri
       if (currentSearchTerm) {
-        query = query.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%`);
+        query = query.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%`);
       }
 
       if (currentFiltroStato) {
@@ -330,6 +332,27 @@ export const VariePage: React.FC = () => {
     }
   };
 
+  // Funzione per combinare i telefoni
+  const combineTelefoni = (telefono1: string | null | undefined, telefono2: string | null | undefined): string => {
+    const formatted1 = telefono1 ? formatTelefono(telefono1) : '';
+    const formatted2 = telefono2 ? formatTelefono(telefono2) : '';
+    
+    if (!formatted1 && !formatted2) return '-';
+    if (!formatted2) return formatted1;
+    if (!formatted1) return formatted2;
+    
+    return `${formatted1} / ${formatted2}`;
+  };
+
+  // Funzione per combinare le proprietà
+  const combineProprieta = (proprieta1: string | null | undefined, proprieta2: string | null | undefined): string => {
+    if (!proprieta1 && !proprieta2) return '-';
+    if (!proprieta2) return proprieta1 || '-';
+    if (!proprieta1) return proprieta2 || '-';
+    
+    return `${proprieta1} / ${proprieta2}`;
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     if (!e || !e.target) {
       console.warn('Evento malformato ignorato');
@@ -346,6 +369,10 @@ export const VariePage: React.FC = () => {
     let processedValue = value;
     
     if (name === 'telefono' && type !== 'checkbox') {
+      processedValue = formatTelefono(value);
+    }
+    
+    if (name === 'telefono2' && type !== 'checkbox') {
       processedValue = formatTelefono(value);
     }
 
@@ -368,6 +395,8 @@ export const VariePage: React.FC = () => {
       const dataToSave = {
         ...formData,
         registrazione: formData.registrazione ? parseInt(formData.registrazione) : null,
+        proprieta2: formData.proprieta2.trim() || null,
+        telefono2: formData.telefono2.trim() || null,
         user_id: user?.id
       };
 
@@ -415,9 +444,11 @@ export const VariePage: React.FC = () => {
       setFormData({
         committente: varia.committente,
         proprieta: varia.proprieta || '',
+        proprieta2: varia.proprieta2 || '',
         indirizzo: varia.indirizzo || '',
         citta: varia.citta || '',
         telefono: varia.telefono || '',
+        telefono2: varia.telefono2 || '',
         mail: varia.mail || '',
         registrazione: varia.registrazione?.toString() || '',
         pagamento: varia.pagamento,
@@ -428,9 +459,11 @@ export const VariePage: React.FC = () => {
       setFormData({
         committente: '',
         proprieta: '',
+        proprieta2: '',
         indirizzo: '',
         citta: '',
         telefono: '',
+        telefono2: '',
         mail: '',
         registrazione: '',
         pagamento: false,
@@ -446,9 +479,11 @@ export const VariePage: React.FC = () => {
     setFormData({
       committente: '',
       proprieta: '',
+      proprieta2: '',
       indirizzo: '',
       citta: '',
       telefono: '',
+      telefono2: '',
       mail: '',
       registrazione: '',
       pagamento: false,
@@ -626,10 +661,10 @@ export const VariePage: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{varia.committente}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.proprieta || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{combineProprieta(varia.proprieta, varia.proprieta2)}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.indirizzo || '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.citta || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.telefono || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{combineTelefoni(varia.telefono, varia.telefono2)}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.mail || '-'}</td>
                     <td className="px-4 py-3 text-center">
                       <button
@@ -813,6 +848,20 @@ export const VariePage: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Proprietario 2
+                    </label>
+                    <input
+                      type="text"
+                      name="proprieta2"
+                      value={formData.proprieta2}
+                      onChange={handleInputChange}
+                      placeholder="Nome secondo proprietario"
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Indirizzo
                     </label>
                     <input
@@ -847,6 +896,20 @@ export const VariePage: React.FC = () => {
                       type="tel"
                       name="telefono"
                       value={formData.telefono}
+                      onChange={handleInputChange}
+                      placeholder="XXX XXX XXXX"
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Telefono 2
+                    </label>
+                    <input
+                      type="tel"
+                      name="telefono2"
+                      value={formData.telefono2}
                       onChange={handleInputChange}
                       placeholder="XXX XXX XXXX"
                       className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
