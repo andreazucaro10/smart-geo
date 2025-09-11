@@ -873,7 +873,8 @@ export const ComuneCatastoPage: React.FC = () => {
       }
 
       closeModal();
-      // Non chiamare fetchData() - il realtime handler gestirà l'aggiornamento
+      // Forza il refresh del componente dopo il salvataggio
+      fetchData();
     } catch (error) {
       console.error('Errore:', error);
       toast.error('Errore nel salvataggio');
@@ -1883,6 +1884,21 @@ export const ComuneCatastoPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Note - Spostate sopra i flag */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Note
+                    </label>
+                    <textarea
+                      name="note"
+                      value={formData.note}
+                      onChange={handleInputChange}
+                      placeholder="Note aggiuntive"
+                      rows={4}
+                      className="input w-full resize-none dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                    />
+                  </div>
+
                   {/* Checkboxes con stile migliorato */}
                   <div className="space-y-4">
                                           <div className="grid grid-cols-2 gap-4">
@@ -2001,21 +2017,6 @@ export const ComuneCatastoPage: React.FC = () => {
                           <span className="text-sm font-medium">Pagamento</span>
                         </label>
                       </div>
-                  </div>
-
-                  {/* Note */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Note
-                    </label>
-                    <textarea
-                      name="note"
-                      value={formData.note}
-                      onChange={handleInputChange}
-                      placeholder="Note aggiuntive"
-                      rows={4}
-                      className="input w-full resize-none dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-                    />
                   </div>
                 </div>
               </div>
