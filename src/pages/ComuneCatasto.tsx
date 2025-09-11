@@ -2172,11 +2172,24 @@ export const ComuneCatastoPage: React.FC = () => {
 
                           await Promise.all(updates);
                           
+                          // Aggiornamento locale immediato per feedback visivo istantaneo
+                          const newStatoInfo = stati.find(s => s.id === parseInt(newStatus));
+                          setPratiche(prev =>
+                            prev.map(pratica =>
+                              selectedRows.has(pratica.id)
+                                ? {
+                                    ...pratica,
+                                    stato: parseInt(newStatus),
+                                    stato_info: newStatoInfo || pratica.stato_info
+                                  }
+                                : pratica
+                            )
+                          );
+                          
                          toast.success(`Stato modificato per ${selectedRows.size} pratiche`);
                          setShowStatusModal(false);
                          setNewStatus('');
                          setSelectedRows(new Set());
-                         // Non chiamare fetchData() - il realtime handler gestirà l'aggiornamento
                         } catch (error) {
                           console.error('Errore nel cambio stato:', error);
                           toast.error('Errore nel cambio stato');
