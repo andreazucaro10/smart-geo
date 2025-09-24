@@ -19,6 +19,7 @@ interface ApeFormData {
   registrazione: number | null;
   progressivo: string;
   pagamento: boolean;
+  created_at: string;
 }
 
 export const ApePage: React.FC = () => {
@@ -36,6 +37,7 @@ export const ApePage: React.FC = () => {
   const [filtriAttivi, setFiltriAttivi] = useState({
     soloNonPagate: false
   });
+  const [filtroAnno, setFiltroAnno] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(25);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -53,7 +55,8 @@ export const ApePage: React.FC = () => {
     note: '',
     registrazione: null,
     progressivo: '',
-    pagamento: false
+    pagamento: false,
+    created_at: new Date().toISOString().split('T')[0] // Default to today's date
   });
   const [submitting, setSubmitting] = useState(false);
   const { user, loading: authLoading } = useAuthStore();
@@ -152,7 +155,8 @@ export const ApePage: React.FC = () => {
       note: '',
       registrazione: null,
       progressivo: '',
-      pagamento: false
+      pagamento: false,
+      created_at: new Date().toISOString().split('T')[0]
     });
     setEditingPratica(null);
   };
@@ -175,7 +179,8 @@ export const ApePage: React.FC = () => {
       note: pratica.note || '',
       registrazione: pratica.registrazione || null,
       progressivo: pratica.progressivo || '',
-      pagamento: pratica.pagamento || false
+      pagamento: pratica.pagamento || false,
+      created_at: pratica.created_at ? new Date(pratica.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
     });
     setEditingPratica(pratica);
     setShowModal(true);
@@ -373,6 +378,7 @@ export const ApePage: React.FC = () => {
         registrazione: formData.registrazione || null,
         progressivo: progressivoFinale || null,
         pagamento: formData.pagamento,
+        created_at: formData.created_at,
         user_id: user?.id
       };
 
@@ -381,10 +387,11 @@ export const ApePage: React.FC = () => {
       if (editingPratica) {
         console.log('Updating existing pratica:', editingPratica.id);
         // Modifica - bypassa tutti i controlli e forza il refresh
+        const { created_at, ...updateData } = dataToSubmit; // Exclude created_at from update
         const { error } = await supabase
           .from('ape')
           .update({
-            ...dataToSubmit,
+            ...updateData,
             updated_at: new Date().toISOString()
           })
           .eq('id', editingPratica.id)
@@ -445,6 +452,7 @@ export const ApePage: React.FC = () => {
   const fetchData = async (customFilters?: {
     searchTerm?: string;
     filtroStato?: string;
+    filtroAnno?: string;
     filtriAttivi?: typeof filtriAttivi;
     page?: number;
     perPage?: number;
@@ -461,6 +469,7 @@ export const ApePage: React.FC = () => {
       
       const currentSearchTerm = customFilters?.searchTerm ?? searchTerm;
       const currentFiltroStato = customFilters?.filtroStato ?? filtroStato;
+      const currentFiltroAnno = customFilters?.filtroAnno ?? filtroAnno;
       const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
       const currentPageParam = customFilters?.page ?? currentPage;
       const currentPerPage = customFilters?.perPage ?? recordsPerPage;
@@ -478,6 +487,13 @@ export const ApePage: React.FC = () => {
 
       if (currentFiltroStato) {
         countQuery = countQuery.eq('registrazione', parseInt(currentFiltroStato));
+      }
+
+      if (currentFiltroAnno) {
+        // Filter by year using the created_at field
+        const startDate = `${currentFiltroAnno}-01-01`;
+        const endDate = `${currentFiltroAnno}-12-31`;
+        countQuery = countQuery.gte('created_at', startDate).lte('created_at', endDate);
       }
 
       if (currentFiltriAttivi.soloNonPagate) {
@@ -513,6 +529,13 @@ export const ApePage: React.FC = () => {
 
       if (currentFiltroStato) {
         query = query.eq('registrazione', parseInt(currentFiltroStato));
+      }
+
+      if (currentFiltroAnno) {
+        // Filter by year using the created_at field
+        const startDate = `${currentFiltroAnno}-01-01`;
+        const endDate = `${currentFiltroAnno}-12-31`;
+        query = query.gte('created_at', startDate).lte('created_at', endDate);
       }
 
       if (currentFiltriAttivi.soloNonPagate) {
@@ -732,6 +755,7 @@ export const ApePage: React.FC = () => {
         committente: `${praticaData.committente}`,
         registrazione: 1,
         pagamento: false,
+        created_at: new Date().toISOString(), // Set new creation date for duplicated record
         user_id: user?.id
       };
 
@@ -916,52 +940,81 @@ export const ApePage: React.FC = () => {
 
       {/* Filtri */}
       <div className="card space-y-4 dark:bg-gray-800 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Campo di ricerca */}
-          <div className="relative">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Cerca committente, indirizzo..."
-              className="input pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-            />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-            <button
-              onClick={handleSearch}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white p-1 rounded"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+           {/* Campo di ricerca */}
+           <div className="relative">
+             <input
+               type="text"
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+               placeholder="Cerca committente, indirizzo..."
+               className="input pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+             />
+             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+             <button
+               onClick={handleSearch}
+               className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white p-1 rounded"
+             >
+               <Search className="w-4 h-4" />
+             </button>
+           </div>
 
-          {/* Filtro Stati APE */}
-          <div className="relative">
-            <select
-              value={filtroStato}
-              onChange={(e) => {
-                const newFiltroStato = e.target.value;
-                setFiltroStato(newFiltroStato);
-                setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
-                // Trigger automatico della ricerca con il nuovo stato
-                fetchData({
-                  filtroStato: newFiltroStato,
-                  page: 1
-                });
-              }}
-              className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            >
-              <option value="">-- Tutti gli stati APE --</option>
-              {stati.map((stato) => (
-                <option key={stato.id} value={stato.id}>
-                  {stato.descrizione}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-          </div>
-        </div>
+           {/* Filtro Stati APE */}
+           <div className="relative">
+             <select
+               value={filtroStato}
+               onChange={(e) => {
+                 const newFiltroStato = e.target.value;
+                 setFiltroStato(newFiltroStato);
+                 setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
+                 // Trigger automatico della ricerca con il nuovo stato
+                 fetchData({
+                   filtroStato: newFiltroStato,
+                   page: 1
+                 });
+               }}
+               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+             >
+               <option value="">-- Tutti gli stati APE --</option>
+               {stati.map((stato) => (
+                 <option key={stato.id} value={stato.id}>
+                   {stato.descrizione}
+                 </option>
+               ))}
+             </select>
+             <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+           </div>
+
+           {/* Filtro Anno */}
+           <div className="relative">
+             <select
+               value={filtroAnno}
+               onChange={(e) => {
+                 const newFiltroAnno = e.target.value;
+                 setFiltroAnno(newFiltroAnno);
+                 setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
+                 // Trigger automatico della ricerca con il nuovo anno
+                 fetchData({
+                   filtroAnno: newFiltroAnno,
+                   page: 1
+                 });
+               }}
+               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+             >
+               <option value="">-- Tutti gli anni --</option>
+               {Array.from({ length: 10 }, (_, i) => {
+                 const year = new Date().getFullYear() - i;
+                 return (
+                   <option key={year} value={year.toString()}>
+                     {year}
+                   </option>
+                 );
+               })}
+             </select>
+             <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+           </div>
+         </div>
 
         {/* Filtri toggle */}
         <div className="flex flex-wrap gap-4">
@@ -1485,6 +1538,19 @@ export const ApePage: React.FC = () => {
                       </select>
                       <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Data Creazione
+                    </label>
+                    <input
+                      type="date"
+                      name="created_at"
+                      value={formData.created_at}
+                      onChange={handleInputChange}
+                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
                   </div>
 
                   <div>
