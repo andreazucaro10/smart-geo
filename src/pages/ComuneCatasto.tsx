@@ -26,7 +26,16 @@ export const ComuneCatastoPage: React.FC = () => {
     completateNonPagate: false
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage, setRecordsPerPage] = useState(25);
+  const [recordsPerPage, setRecordsPerPage] = useState(() => {
+    const saved = localStorage.getItem('comune-catasto-records-per-page');
+    if (saved) {
+      const parsed = parseInt(saved);
+      if ([25, 50, 100, 200].includes(parsed)) {
+        return parsed;
+      }
+    }
+    return 25;
+  });
   const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -457,6 +466,7 @@ export const ComuneCatastoPage: React.FC = () => {
 
   const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
     setRecordsPerPage(newRecordsPerPage);
+    localStorage.setItem('comune-catasto-records-per-page', newRecordsPerPage.toString());
     setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
     setSelectedRows(new Set()); // Resetta la selezione quando si cambia il numero di record
     fetchData({

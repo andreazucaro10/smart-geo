@@ -39,7 +39,16 @@ export const ApePage: React.FC = () => {
   });
   const [filtroAnno, setFiltroAnno] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage, setRecordsPerPage] = useState(25);
+  const [recordsPerPage, setRecordsPerPage] = useState(() => {
+    const saved = localStorage.getItem('ape-records-per-page');
+    if (saved) {
+      const parsed = parseInt(saved);
+      if ([25, 50, 100, 200].includes(parsed)) {
+        return parsed;
+      }
+    }
+    return 25;
+  });
   const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editingPratica, setEditingPratica] = useState<Ape | null>(null);
@@ -737,8 +746,9 @@ export const ApePage: React.FC = () => {
 
   const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
     setRecordsPerPage(newRecordsPerPage);
+    localStorage.setItem('ape-records-per-page', newRecordsPerPage.toString());
     setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
-    fetchData({ 
+    fetchData({
       perPage: newRecordsPerPage,
       page: 1
     });
@@ -1145,9 +1155,6 @@ export const ApePage: React.FC = () => {
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Pagamento
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Data Creazione
-                  </th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Azioni
                   </th>
@@ -1217,9 +1224,6 @@ export const ApePage: React.FC = () => {
                       >
                         {renderToggleButton(pratica.pagamento)}
                       </button>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                      {formatDate(pratica.created_at)}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
