@@ -83,7 +83,7 @@ export const Spese: React.FC = () => {
     if (user?.id) {
       fetchSpese();
     }
-  }, [user?.id, searchTerm, filtriAttivi, dataDa, dataA]);
+  }, [user?.id, searchTerm, filtriAttivi.nonPagate, filtriAttivi.pronteDaPagare, dataDa, dataA]);
 
 
 
@@ -105,9 +105,6 @@ export const Spese: React.FC = () => {
     };
 
     setFiltriAttivi(newFiltriAttivi);
-
-    // Trigger automatico della ricerca con i nuovi filtri
-    fetchSpese();
   };
 
   const handleDeleteSpesa = async (id: number) => {
@@ -290,6 +287,10 @@ export const Spese: React.FC = () => {
       style: 'currency',
       currency: 'EUR'
     }).format(amount);
+  };
+
+  const calculateTotal = () => {
+    return spese.reduce((total, spesa) => total + spesa.spese, 0);
   };
 
   const formatDate = (dateString: string | null) => {
@@ -603,6 +604,17 @@ export const Spese: React.FC = () => {
                 ))
               )}
             </tbody>
+            <tfoot className="bg-gray-50 dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-600">
+              <tr>
+                <td colSpan={2} className="px-6 py-4 text-right font-bold text-gray-900 dark:text-white">
+                  Totale:
+                </td>
+                <td className="px-6 py-4 text-right font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(calculateTotal())}
+                </td>
+                <td colSpan={5}></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
