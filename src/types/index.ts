@@ -136,6 +136,7 @@ export interface Scadenza {
   data_scadenza?: string;
   pagamento: boolean;
   data_pagamento?: string;
+  pagamento_pronto: boolean;
   stato_id?: number;
   created_at: string;
   updated_at: string;

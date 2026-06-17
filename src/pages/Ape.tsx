@@ -37,7 +37,7 @@ export const ApePage: React.FC = () => {
   const [filtriAttivi, setFiltriAttivi] = useState({
     soloNonPagate: false
   });
-  const [filtroAnno, setFiltroAnno] = useState(new Date().getFullYear().toString());
+  const [filtroAnno, setFiltroAnno] = useState('');
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(() => {
