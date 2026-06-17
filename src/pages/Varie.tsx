@@ -34,6 +34,8 @@ export const VariePage: React.FC = () => {
     registrazione: '',
     tipo_incarico: '',
     pagamento: false,
+    acconto: false,
+    omaggio: false,
     note: ''
   });
   const { user, loading: authLoading } = useAuthStore();
@@ -272,7 +274,7 @@ export const VariePage: React.FC = () => {
     return Math.ceil(totalRecords / recordsPerPage);
   };
 
-  const handleToggleField = async (varia: Varie, field: 'pagamento') => {
+  const handleToggleField = async (varia: Varie, field: 'pagamento' | 'acconto' | 'omaggio') => {
     try {
       const newValue = !varia[field];
 
@@ -455,6 +457,8 @@ export const VariePage: React.FC = () => {
         registrazione: varia.registrazione?.toString() || '',
         tipo_incarico: varia.tipo_incarico || '',
         pagamento: varia.pagamento,
+        acconto: varia.acconto,
+        omaggio: varia.omaggio,
         note: varia.note || ''
       });
     } else {
@@ -492,6 +496,8 @@ export const VariePage: React.FC = () => {
       registrazione: '',
       tipo_incarico: '',
       pagamento: false,
+      acconto: false,
+      omaggio: false,
       note: ''
     });
   };
@@ -630,6 +636,8 @@ export const VariePage: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Telefono</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pagamento</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acconto</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Omaggio</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Note</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Azioni</th>
               </tr>
@@ -637,7 +645,7 @@ export const VariePage: React.FC = () => {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading || authLoading ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={13} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">
@@ -648,7 +656,7 @@ export const VariePage: React.FC = () => {
                 </tr>
               ) : varie.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={13} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nessuna varia trovata
                   </td>
                 </tr>
@@ -677,6 +685,24 @@ export const VariePage: React.FC = () => {
                         title="Clicca per cambiare stato"
                       >
                         {renderToggleButton(varia.pagamento)}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleToggleField(varia, 'acconto')}
+                        className="transition-colors cursor-pointer"
+                        title="Clicca per cambiare stato"
+                      >
+                        {renderToggleButton(varia.acconto)}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleToggleField(varia, 'omaggio')}
+                        className="transition-colors cursor-pointer"
+                        title="Clicca per cambiare stato"
+                      >
+                        {renderToggleButton(varia.omaggio)}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">{varia.note || '-'}</td>
@@ -1009,6 +1035,58 @@ export const VariePage: React.FC = () => {
                         )}
                       </div>
                       <span className="text-sm font-medium">Pagamento</span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${formData.acconto
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-300 cursor-pointer'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
+                      }`}>
+                      <input
+                        type="checkbox"
+                        name="acconto"
+                        checked={formData.acconto}
+                        onChange={handleInputChange}
+                        className="sr-only"
+                      />
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${formData.acconto
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                        }`}>
+                        {formData.acconto && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium">Acconto</span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${formData.omaggio
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-300 cursor-pointer'
+                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer'
+                      }`}>
+                      <input
+                        type="checkbox"
+                        name="omaggio"
+                        checked={formData.omaggio}
+                        onChange={handleInputChange}
+                        className="sr-only"
+                      />
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${formData.omaggio
+                          ? 'border-blue-500 bg-blue-500'
+                          : 'border-gray-300 dark:border-gray-500 bg-transparent'
+                        }`}>
+                        {formData.omaggio && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium">Omaggio</span>
                     </label>
                   </div>
                 </div>

@@ -111,6 +111,8 @@ export interface Varie {
   registrazione?: number;
   tipo_incarico?: string;
   pagamento: boolean;
+  acconto: boolean;
+  omaggio: boolean;
   created_at: string;
   // Joined fields
   registrazione_info?: StatoGenerale;
