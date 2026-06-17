@@ -123,11 +123,12 @@ export const Dashboard: React.FC = () => {
           .select('id')
           .eq('pagamento', 0),
 
-        // Varie non pagate: pagamento = 0
+        // Varie non pagate: pagamento = 0, escludi omaggio
         supabase
           .from('varie')
           .select('id')
-          .eq('pagamento', 0),
+          .eq('pagamento', 0)
+          .eq('omaggio', false),
 
         // Spese imminenti: scadenza entro 30 giorni o senza data e non pagate
         (() => {
