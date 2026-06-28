@@ -39,9 +39,9 @@ export const Contabilita: React.FC = () => {
   const [formData, setFormData] = useState({
     mese: 'Gennaio',
     anno: new Date().getFullYear(),
-    numeroFattura: 1,
-    onorario: 0,
-    spese: 0,
+    numeroFattura: '',
+    onorario: '',
+    spese: '',
     bolli: 2.00,
     cassaGeometri: 0,
     tasse: 0,
@@ -56,12 +56,34 @@ export const Contabilita: React.FC = () => {
     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
   ];
 
-  // Genera lista anni (da 5 anni fa a 2 anni nel futuro)
+  // Genera lista anni dal database (solo anni con fatture)
+  const [anni, setAnni] = useState<number[]>([]);
   const currentYear = new Date().getFullYear();
-  const anni = Array.from({ length: 8 }, (_, i) => currentYear - 5 + i);
 
   // Opzioni records per pagina
   const recordsPerPageOptions = [5, 10, 25, 50, 100];
+
+  const fetchAnniDisponibili = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('fatture')
+        .select('anno_fattura')
+        .eq('user_id', user?.id)
+        .not('anno_fattura', 'is', null);
+
+      if (error) {
+        console.error('Errore nel caricamento anni:', error);
+        return;
+      }
+
+      // Estrae gli anni unici e li ordina in decrescente
+      const anniUnici = [...new Set(data?.map(f => f.anno_fattura).filter(Boolean))] as number[];
+      anniUnici.sort((a, b) => b - a);
+      setAnni(anniUnici);
+    } catch (error) {
+      console.error('Errore:', error);
+    }
+  };
 
   const fetchFatture = async () => {
     try {
@@ -73,13 +95,11 @@ export const Contabilita: React.FC = () => {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user?.id);
 
-      // Query per i dati
+      // Query per i dati - senza range, ordinamento fatto in JS
       let dataQuery = supabase
         .from('fatture')
         .select('*')
-        .eq('user_id', user?.id)
-        .order('data_creazione', { ascending: false })
-        .range((currentPage - 1) * recordsPerPage, currentPage * recordsPerPage - 1);
+        .eq('user_id', user?.id);
 
       // Applica filtri
       if (filtroMese) {
@@ -104,17 +124,32 @@ export const Contabilita: React.FC = () => {
         return;
       }
 
-      setFatture(data || []);
+      // Ordina per anno desc, poi per numero_fattura desc (numericamente)
+      const sortedData = (data || []).sort((a, b) => {
+        const annoDiff = (b.anno_fattura || 0) - (a.anno_fattura || 0);
+        if (annoDiff !== 0) return annoDiff;
+        
+        const numA = parseInt(a.numero_fattura) || 0;
+        const numB = parseInt(b.numero_fattura) || 0;
+        return numB - numA;
+      });
+
+      // Applica paginazione in JavaScript
+      const start = (currentPage - 1) * recordsPerPage;
+      const end = start + recordsPerPage;
+      const paginatedData = sortedData.slice(start, end);
+
+      setFatture(paginatedData);
       setTotalRecords(count || 0);
       
-      // Calcola i totali
-      const totaleOnorario = (data || []).reduce((sum, fattura) => sum + fattura.onorario, 0);
-      const totaleSpese = (data || []).reduce((sum, fattura) => sum + fattura.spese, 0);
-      const totaleBolli = (data || []).reduce((sum, fattura) => sum + fattura.bolli, 0);
-      const totaleCassaGeometri = (data || []).reduce((sum, fattura) => sum + fattura.cassa_geometri, 0);
-      const totaleTasse = (data || []).reduce((sum, fattura) => sum + fattura.tasse, 0);
-      const totaleFatturato = (data || []).reduce((sum, fattura) => sum + fattura.fatturato, 0);
-      const totaleGuadagnoNetto = (data || []).reduce((sum, fattura) => sum + fattura.guadagno_netto, 0);
+      // Calcola i totali (su tutti i dati filtrati, non solo la pagina corrente)
+      const totaleOnorario = sortedData.reduce((sum, fattura) => sum + (fattura.onorario || 0), 0);
+      const totaleSpese = sortedData.reduce((sum, fattura) => sum + (fattura.spese || 0), 0);
+      const totaleBolli = sortedData.reduce((sum, fattura) => sum + fattura.bolli, 0);
+      const totaleCassaGeometri = sortedData.reduce((sum, fattura) => sum + fattura.cassa_geometri, 0);
+      const totaleTasse = sortedData.reduce((sum, fattura) => sum + fattura.tasse, 0);
+      const totaleFatturato = sortedData.reduce((sum, fattura) => sum + fattura.fatturato, 0);
+      const totaleGuadagnoNetto = sortedData.reduce((sum, fattura) => sum + fattura.guadagno_netto, 0);
       
       setTotals({
         onorario: totaleOnorario,
@@ -151,7 +186,31 @@ export const Contabilita: React.FC = () => {
       if (data) {
         setParametroTasse(data.percentuale / 100); // Converte da percentuale a decimale
       } else {
-        // Se non esistono parametri per questo anno, creali con default 22%
+        setParametroTasse(0.22); // Default 22% se non esistono parametri
+      }
+    } catch (error) {
+      console.error('Errore:', error);
+    }
+  };
+
+  const ensureParametriTasse = async (): Promise<number> => {
+    try {
+      const { data, error } = await supabase
+        .from('parametri_fatturazione')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('anno', formData.anno)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Errore caricamento parametri:', error);
+        return 0.22; // Default in caso di errore
+      }
+
+      if (data) {
+        return data.percentuale / 100; // Converte da percentuale a decimale
+      } else {
+        // Crea i parametri solo quando si salva la fattura
         const { error: insertError } = await supabase
           .from('parametri_fatturazione')
           .insert({
@@ -162,51 +221,70 @@ export const Contabilita: React.FC = () => {
 
         if (insertError) {
           console.error('Errore nella creazione dei parametri:', insertError);
-        } else {
-          setParametroTasse(0.22); // 22% default
-          toast.success(`Parametri tasse creati per l'anno ${formData.anno} (22%)`);
+          return 0.22; // Default in caso di errore
         }
+
+        toast.success(`Parametri tasse creati per l'anno ${formData.anno} (22%)`);
+        return 0.22; // 22% default
       }
     } catch (error) {
       console.error('Errore:', error);
+      return 0.22; // Default in caso di errore
     }
   };
 
-  const getNextNumeroFattura = async () => {
+  const getNextNumeroFattura = async (anno: number) => {
     try {
+      console.log('[DEBUG FATTURA] Cerco ultimo numero per anno:', anno, '| user_id:', user?.id);
+      
+      // Prendi tutti i numeri fattura per l'anno (numero_fattura è varchar, ordine alfabetico non funziona)
       const { data, error } = await supabase
         .from('fatture')
         .select('numero_fattura')
         .eq('user_id', user?.id)
-        .order('numero_fattura', { ascending: false })
-        .limit(1);
+        .eq('anno_fattura', anno);
 
       if (error) {
-        console.error('Errore nel recupero ultimo numero fattura:', error);
+        console.error('[DEBUG FATTURA] Errore nel recupero ultimo numero fattura:', error);
         return 1;
       }
 
+      console.log('[DEBUG FATTURA] Risultato query:', data);
+
       if (data && data.length > 0) {
-        const ultimoNumero = parseInt(data[0].numero_fattura);
-        return ultimoNumero + 1;
+        // Converte tutti i numeri e trova il massimo
+        const numeri = data
+          .map(f => parseInt(f.numero_fattura))
+          .filter(n => !isNaN(n));
+        
+        console.log('[DEBUG FATTURA] Numeri trovati:', numeri);
+
+        if (numeri.length > 0) {
+          const ultimoNumero = Math.max(...numeri);
+          const prossimoNumero = ultimoNumero + 1;
+          console.log('[DEBUG FATTURA] Ultimo numero trovato:', ultimoNumero, '| Prossimo numero:', prossimoNumero);
+          return prossimoNumero;
+        }
       }
 
+      console.log('[DEBUG FATTURA] Nessuna fattura trovata per anno', anno, '| Parto da 1');
       return 1;
     } catch (error) {
-      console.error('Errore:', error);
+      console.error('[DEBUG FATTURA] Errore:', error);
       return 1;
     }
   };
 
   useEffect(() => {
     if (user?.id) {
+      fetchAnniDisponibili();
       fetchFatture();
     }
   }, [user?.id, currentPage, recordsPerPage]);
 
   // Ricalcola i valori quando cambiano i parametri delle tasse
   useEffect(() => {
-    if (formData.onorario > 0 || formData.spese > 0) {
+    if (formData.onorario || formData.spese) {
       const calculatedValues = calculateValues(formData.onorario, formData.spese);
       setFormData(prev => ({ ...prev, ...calculatedValues }));
     }
@@ -230,12 +308,33 @@ export const Contabilita: React.FC = () => {
   };
 
   // Calcoli automatici
-  const calculateValues = (onorario: number, spese: number) => {
+  const calculateValues = (onorario: number | string, spese: number | string) => {
+    const onorarioNum = parseFloat(onorario as string) || 0;
+    const speseNum = parseFloat(spese as string) || 0;
     const bolli = 2.00;
-    const cassaGeometri = onorario * 0.05; // 5% dell'onorario
-    const tasse = (onorario + bolli) * 0.78 * parametroTasse ;
-    const fatturato = onorario + spese + bolli + cassaGeometri;
-    const guadagnoNetto = fatturato - tasse - cassaGeometri - bolli - spese;
+    const cassaGeometri = onorarioNum * 0.05; // 5% dell'onorario
+    const tasse = (onorarioNum + bolli) * 0.78 * parametroTasse;
+    const fatturato = onorarioNum + speseNum + bolli + cassaGeometri;
+    const guadagnoNetto = fatturato - tasse - cassaGeometri - bolli - speseNum;
+
+    return {
+      bolli,
+      cassaGeometri,
+      tasse,
+      fatturato,
+      guadagnoNetto
+    };
+  };
+
+  // Calcoli automatici con percentuale specifica
+  const calculateValuesWithPercent = (onorario: number | string, spese: number | string, percentuale: number) => {
+    const onorarioNum = parseFloat(onorario as string) || 0;
+    const speseNum = parseFloat(spese as string) || 0;
+    const bolli = 2.00;
+    const cassaGeometri = onorarioNum * 0.05; // 5% dell'onorario
+    const tasse = (onorarioNum + bolli) * 0.78 * percentuale;
+    const fatturato = onorarioNum + speseNum + bolli + cassaGeometri;
+    const guadagnoNetto = fatturato - tasse - cassaGeometri - bolli - speseNum;
 
     return {
       bolli,
@@ -252,8 +351,8 @@ export const Contabilita: React.FC = () => {
     // Se cambia onorario o spese, ricalcola tutti i valori
     if (field === 'onorario' || field === 'spese') {
       const calculatedValues = calculateValues(
-        field === 'onorario' ? parseFloat(value) || 0 : formData.onorario,
-        field === 'spese' ? parseFloat(value) || 0 : formData.spese
+        field === 'onorario' ? value : formData.onorario,
+        field === 'spese' ? value : formData.spese
       );
       
       Object.assign(newFormData, calculatedValues);
@@ -268,13 +367,13 @@ export const Contabilita: React.FC = () => {
   };
 
   const openModal = async () => {
-    const nextNumero = await getNextNumeroFattura();
+    const annoCorrente = new Date().getFullYear();
     setFormData({
       mese: 'Gennaio',
-      anno: new Date().getFullYear(),
-      numeroFattura: nextNumero,
-      onorario: 0,
-      spese: 0,
+      anno: annoCorrente,
+      numeroFattura: '',
+      onorario: '',
+      spese: '',
       bolli: 2.00,
       cassaGeometri: 0,
       tasse: 0,
@@ -290,9 +389,9 @@ export const Contabilita: React.FC = () => {
     setFormData({
       mese: fattura.mese_fattura,
       anno: fattura.anno_fattura || new Date().getFullYear(),
-      numeroFattura: parseInt(fattura.numero_fattura),
-      onorario: fattura.onorario,
-      spese: fattura.spese,
+      numeroFattura: fattura.numero_fattura || '',
+      onorario: fattura.onorario ?? '',
+      spese: fattura.spese ?? '',
       bolli: fattura.bolli,
       cassaGeometri: fattura.cassa_geometri,
       tasse: fattura.tasse,
@@ -308,16 +407,43 @@ export const Contabilita: React.FC = () => {
     try {
       setSaving(true);
 
+      // Assicura che i parametri fatturazione esistano per l'anno corrente
+      const percentualeTasse = await ensureParametriTasse();
+      setParametroTasse(percentualeTasse);
+
+      // Ricalcola i valori con la percentuale aggiornata
+      const calculatedValues = calculateValuesWithPercent(formData.onorario, formData.spese, percentualeTasse);
+      setFormData(prev => ({ ...prev, ...calculatedValues }));
+
+      // Determina il numero fattura: usa quello inserito dall'utente se presente, altrimenti auto-genera
+      const isEditing = !!editingId;
+      const userInsertedNumber = formData.numeroFattura ? formData.numeroFattura.toString() : null;
+      let numeroFattura: string;
+
+      if (isEditing) {
+        numeroFattura = formData.numeroFattura.toString();
+        console.log('[DEBUG FATTURA] Modifica - Numero:', numeroFattura, 'Anno:', formData.anno);
+      } else if (userInsertedNumber) {
+        numeroFattura = userInsertedNumber;
+        console.log('[DEBUG FATTURA] Inserimento manuale - Numero:', numeroFattura, 'Anno:', formData.anno);
+      } else {
+        const autoNumber = await getNextNumeroFattura(formData.anno);
+        numeroFattura = autoNumber.toString();
+        console.log('[DEBUG FATTURA] Auto-generato - Numero:', numeroFattura, 'Anno:', formData.anno);
+      }
+
+      console.log('[DEBUG FATTURA] Numero finale da salvare:', numeroFattura, '| Tipo:', typeof numeroFattura);
+
       if (editingId) {
         // Update existing fattura
         const { error } = await supabase
           .from('fatture')
           .update({
-            numero_fattura: formData.numeroFattura.toString(),
+            numero_fattura: numeroFattura.toString(),
             mese_fattura: formData.mese,
             anno_fattura: formData.anno,
-            onorario: formData.onorario,
-            spese: formData.spese,
+            onorario: formData.onorario ? parseFloat(formData.onorario as string) : null,
+            spese: formData.spese ? parseFloat(formData.spese as string) : null,
             bolli: formData.bolli,
             cassa_geometri: formData.cassaGeometri,
             tasse: formData.tasse,
@@ -329,7 +455,8 @@ export const Contabilita: React.FC = () => {
           .eq('user_id', user?.id);
 
         if (error) {
-          console.error('Errore nell\'aggiornamento fattura:', error);
+          console.error('[DEBUG FATTURA] Errore nell\'aggiornamento fattura:', error);
+          console.error('[DEBUG FATTURA] Dettagli errore:', JSON.stringify(error, null, 2));
           toast.error('Errore nell\'aggiornamento della fattura');
           return;
         }
@@ -341,11 +468,11 @@ export const Contabilita: React.FC = () => {
           .from('fatture')
           .insert({
             user_id: user?.id,
-            numero_fattura: formData.numeroFattura.toString(),
+            numero_fattura: numeroFattura.toString(),
             mese_fattura: formData.mese,
             anno_fattura: formData.anno,
-            onorario: formData.onorario,
-            spese: formData.spese,
+            onorario: formData.onorario ? parseFloat(formData.onorario as string) : null,
+            spese: formData.spese ? parseFloat(formData.spese as string) : null,
             bolli: formData.bolli,
             cassa_geometri: formData.cassaGeometri,
             tasse: formData.tasse,
@@ -356,7 +483,13 @@ export const Contabilita: React.FC = () => {
           });
 
         if (error) {
-          console.error('Errore nel salvataggio fattura:', error);
+          console.error('[DEBUG FATTURA] Errore nel salvataggio fattura:', error);
+          console.error('[DEBUG FATTURA] Dettagli errore:', JSON.stringify(error, null, 2));
+          console.error('[DEBUG FATTURA] Dati inviati:', {
+            numero_fattura: numeroFattura.toString(),
+            mese_fattura: formData.mese,
+            anno_fattura: formData.anno
+          });
           toast.error('Errore nel salvataggio della fattura');
           return;
         }
@@ -366,6 +499,7 @@ export const Contabilita: React.FC = () => {
 
       setShowModal(false);
       setEditingId(null);
+      fetchAnniDisponibili();
       fetchFatture();
     } catch (error) {
       console.error('Errore:', error);
@@ -393,6 +527,7 @@ export const Contabilita: React.FC = () => {
       }
 
       toast.success('Fattura eliminata con successo');
+      fetchAnniDisponibili();
       fetchFatture();
     } catch (error) {
       console.error('Errore:', error);
@@ -400,11 +535,11 @@ export const Contabilita: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null) => {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
       currency: 'EUR'
-    }).format(amount);
+    }).format(amount || 0);
   };
 
   const totalPages = Math.ceil(totalRecords / recordsPerPage);
@@ -740,9 +875,10 @@ export const Contabilita: React.FC = () => {
                     Numero Fattura
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={formData.numeroFattura}
-                    onChange={(e) => handleFormChange('numeroFattura', parseInt(e.target.value))}
+                    onChange={(e) => handleFormChange('numeroFattura', e.target.value)}
+                    placeholder="Numero generato automaticamente al salvataggio"
                     className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
@@ -756,7 +892,7 @@ export const Contabilita: React.FC = () => {
                     type="number"
                     step="0.01"
                     value={formData.onorario}
-                    onChange={(e) => handleFormChange('onorario', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleFormChange('onorario', e.target.value)}
                     className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     placeholder="0,00"
                   />
@@ -771,7 +907,7 @@ export const Contabilita: React.FC = () => {
                     type="number"
                     step="0.01"
                     value={formData.spese}
-                    onChange={(e) => handleFormChange('spese', parseFloat(e.target.value) || 0)}
+                    onChange={(e) => handleFormChange('spese', e.target.value)}
                     className="input dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     placeholder="0,00"
                   />

@@ -149,8 +149,8 @@ export interface Fattura {
   numero_fattura: string;
   mese_fattura: string;
   anno_fattura?: number;
-  onorario: number;
-  spese: number;
+  onorario: number | null;
+  spese: number | null;
   bolli: number;
   cassa_geometri: number;
   tasse: number;
