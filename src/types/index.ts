@@ -54,6 +54,13 @@ export interface TipoIncarico {
   updated_at: string;
 }
 
+export interface TipoPratica {
+  id: number;
+  descrizione: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ComuneCatasto {
   id: number;
   committente: string;
@@ -71,11 +78,13 @@ export interface ComuneCatasto {
   stato?: number;
   pagamento: boolean;
   tipo_incarico?: number;
+  tipo_pratica?: number;
   created_at: string;
   updated_at: string;
   // Joined fields
   stato_info?: StatoGenerale;
   tipo_incarico_info?: TipoIncarico;
+  tipo_pratica_info?: TipoPratica;
 }
 
 export interface Ape {

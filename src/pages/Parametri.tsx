@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Check, X, Building, Calculator, Briefcase, Calendar, FileCheck, Settings, CreditCard } from 'lucide-react';
+import { Plus, Edit, Trash2, Check, X, Building, Calculator, Briefcase, Calendar, FileCheck, Settings, CreditCard, Tag } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
@@ -43,6 +43,13 @@ interface CategoriaPlanner {
   active: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+interface TipoPratica {
+  id: number;
+  descrizione: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface StatoApe {
@@ -121,6 +128,12 @@ export const Parametri: React.FC = () => {
   const [editingStatoScadenza, setEditingStatoScadenza] = useState<StatoScadenza | null>(null);
   const [formStatiScadenze, setFormStatiScadenze] = useState({ descrizione: '', colore: '#f43f5e' });
 
+  // Stati per Tipi Pratica
+  const [tipiPratica, setTipiPratica] = useState<TipoPratica[]>([]);
+  const [showModalTipiPratica, setShowModalTipiPratica] = useState(false);
+  const [editingTipoPratica, setEditingTipoPratica] = useState<TipoPratica | null>(null);
+  const [formTipiPratica, setFormTipiPratica] = useState({ descrizione: '' });
+
   // Funzione per ottenere la prossima posizione disponibile
   const getNextOrderPosition = () => {
     if (categoriePlanner.length === 0) return 1;
@@ -163,7 +176,8 @@ export const Parametri: React.FC = () => {
       loadCategoriePlanner(),
       loadStatiApe(),
       loadStatiGenerali(),
-      loadStatiScadenze()
+      loadStatiScadenze(),
+      loadTipiPratica()
     ]);
     setLoading(false);
   };
@@ -725,6 +739,84 @@ export const Parametri: React.FC = () => {
     }
   };
 
+  // === TIPI PRATICA ===
+  const loadTipiPratica = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tipi_pratica')
+        .select('*')
+        .order('id');
+
+      if (error) {
+        console.error('Errore caricamento tipi pratica:', error);
+        setTipiPratica([]);
+        return;
+      }
+
+      setTipiPratica(data || []);
+    } catch (error) {
+      console.error('Errore:', error);
+      setTipiPratica([]);
+    }
+  };
+
+  const saveTipoPratica = async () => {
+    if (!formTipiPratica.descrizione.trim()) {
+      toast.error('La descrizione è obbligatoria');
+      return;
+    }
+
+    try {
+      const dataToSave = {
+        descrizione: formTipiPratica.descrizione.trim()
+      };
+
+      if (editingTipoPratica) {
+        const { error } = await supabase
+          .from('tipi_pratica')
+          .update(dataToSave)
+          .eq('id', editingTipoPratica.id);
+
+        if (error) throw error;
+        toast.success('Tipo pratica modificato con successo');
+      } else {
+        const { error } = await supabase
+          .from('tipi_pratica')
+          .insert([dataToSave]);
+
+        if (error) throw error;
+        toast.success('Tipo pratica creato con successo');
+      }
+
+      setShowModalTipiPratica(false);
+      setEditingTipoPratica(null);
+      setFormTipiPratica({ descrizione: '' });
+      loadTipiPratica();
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nel salvataggio del tipo pratica');
+    }
+  };
+
+  const deleteTipoPratica = async (id: number) => {
+    if (!confirm('Sei sicuro di voler eliminare questo tipo di pratica?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('tipi_pratica')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      loadTipiPratica();
+      toast.success('Tipo pratica eliminato con successo');
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nell\'eliminazione del tipo pratica');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1022,6 +1114,74 @@ export const Parametri: React.FC = () => {
                       </button>
                       <button
                         onClick={() => deleteTipoIncarico(tipo.id)}
+                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Tipi di Pratica */}
+      <div className="card dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Tag className="w-6 h-6 text-teal-600 dark:text-teal-400" />
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Tipi di Pratica</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Gestione tipi di pratica per Comune e Catasto</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowModalTipiPratica(true)}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Nuovo Tipo Pratica
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Descrizione</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data creazione</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ultima modifica</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Azioni</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+              {tipiPratica.map((tipo) => (
+                <tr key={tipo.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{tipo.id}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{tipo.descrizione}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                    {new Date(tipo.created_at).toLocaleDateString('it-IT')}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                    {new Date(tipo.updated_at).toLocaleDateString('it-IT')}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingTipoPratica(tipo);
+                          setFormTipiPratica({ descrizione: tipo.descrizione });
+                          setShowModalTipiPratica(true);
+                        }}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteTipoPratica(tipo.id)}
                         className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors p-1"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1805,8 +1965,61 @@ export const Parametri: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Tipi Pratica */}
+      {showModalTipiPratica && (
+        <div className="modal-overlay">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                {editingTipoPratica ? 'Modifica Tipo Pratica' : 'Nuovo Tipo Pratica'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowModalTipiPratica(false);
+                  setEditingTipoPratica(null);
+                  setFormTipiPratica({ descrizione: '' });
+                }}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrizione</label>
+                <input
+                  type="text"
+                  value={formTipiPratica.descrizione}
+                  onChange={(e) => setFormTipiPratica(prev => ({ ...prev, descrizione: e.target.value }))}
+                  className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  placeholder="Descrizione tipo pratica"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setShowModalTipiPratica(false);
+                  setEditingTipoPratica(null);
+                  setFormTipiPratica({ descrizione: '' });
+                }}
+                className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={saveTipoPratica}
+                className="btn btn-primary"
+              >
+                {editingTipoPratica ? 'Modifica' : 'Salva'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default Parametri; 
+export default Parametri;

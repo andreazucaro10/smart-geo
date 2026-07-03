@@ -5,7 +5,7 @@ import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import { RubricaAutocomplete } from '../components/RubricaAutocomplete';
 import { syncRubricaFromPratica } from '../utils/rubricaSync';
-import type { ComuneCatasto, StatoGenerale, TipoIncarico, Rubrica } from '../types';
+import type { ComuneCatasto, StatoGenerale, TipoIncarico, TipoPratica, Rubrica } from '../types';
 import toast from 'react-hot-toast';
 
 export const ComuneCatastoPage: React.FC = () => {
@@ -13,12 +13,14 @@ export const ComuneCatastoPage: React.FC = () => {
   const [pratiche, setPratiche] = useState<ComuneCatasto[]>([]);
   const [stati, setStati] = useState<StatoGenerale[]>([]);
   const [tipiIncarico, setTipiIncarico] = useState<TipoIncarico[]>([]);
+  const [tipiPratica, setTipiPratica] = useState<TipoPratica[]>([]);
   const [loading, setLoading] = useState(true);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroTipoIncarico, setFiltroTipoIncarico] = useState('');
+  const [filtroTipoPratica, setFiltroTipoPratica] = useState('');
   const [filtriAttivi, setFiltriAttivi] = useState({
     comune: false,
     catasto: false,
@@ -56,6 +58,7 @@ export const ComuneCatastoPage: React.FC = () => {
     telefono2: '',
     mail: '',
     tipo_incarico: '',
+    tipo_pratica: '',
     comune: false,
     catasto: false,
     fine_lavori: false,
@@ -177,6 +180,7 @@ export const ComuneCatastoPage: React.FC = () => {
     searchTerm?: string;
     filtroStato?: string;
     filtroTipoIncarico?: string;
+    filtroTipoPratica?: string;
     filtriAttivi?: typeof filtriAttivi;
     page?: number;
     perPage?: number;
@@ -188,6 +192,7 @@ export const ComuneCatastoPage: React.FC = () => {
       const currentSearchTerm = customFilters?.searchTerm ?? searchTerm;
       const currentFiltroStato = customFilters?.filtroStato ?? filtroStato;
       const currentFiltroTipoIncarico = customFilters?.filtroTipoIncarico ?? filtroTipoIncarico;
+      const currentFiltroTipoPratica = customFilters?.filtroTipoPratica ?? filtroTipoPratica;
       const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
       const currentPageParam = customFilters?.page ?? currentPage;
       const currentPerPage = customFilters?.perPage ?? recordsPerPage;
@@ -209,6 +214,10 @@ export const ComuneCatastoPage: React.FC = () => {
 
       if (currentFiltroTipoIncarico) {
         countQuery = countQuery.eq('tipo_incarico', parseInt(currentFiltroTipoIncarico));
+      }
+
+      if (currentFiltroTipoPratica) {
+        countQuery = countQuery.eq('tipo_pratica', parseInt(currentFiltroTipoPratica));
       }
 
       if (currentFiltriAttivi.comune) {
@@ -245,7 +254,8 @@ export const ComuneCatastoPage: React.FC = () => {
         .select(`
           *,
           stato_info:stati_generali(id, descrizione, colore),
-          tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto)
+          tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto),
+          tipo_pratica_info:tipi_pratica(id, descrizione)
         `)
         .eq('user_id', user?.id)
         .order('stato', { ascending: true })
@@ -262,6 +272,10 @@ export const ComuneCatastoPage: React.FC = () => {
 
       if (currentFiltroTipoIncarico) {
         query = query.eq('tipo_incarico', parseInt(currentFiltroTipoIncarico));
+      }
+
+      if (currentFiltroTipoPratica) {
+        query = query.eq('tipo_pratica', parseInt(currentFiltroTipoPratica));
       }
 
       if (currentFiltriAttivi.comune) {
@@ -298,9 +312,10 @@ export const ComuneCatastoPage: React.FC = () => {
       }
 
       // Carica stati e tipi incarico per i dropdown
-      const [statiResult, tipiResult] = await Promise.all([
+      const [statiResult, tipiResult, tipiPraticaResult] = await Promise.all([
         supabase.from('stati_generali').select('*').order('ordinamento'),
-        supabase.from('tipi_incarico').select('*').order('descrizione')
+        supabase.from('tipi_incarico').select('*').order('descrizione'),
+        supabase.from('tipi_pratica').select('*').order('descrizione')
       ]);
 
       if (statiResult.error) {
@@ -313,6 +328,12 @@ export const ComuneCatastoPage: React.FC = () => {
         console.error('Errore caricamento tipi incarico:', tipiResult.error);
       } else {
         setTipiIncarico(tipiResult.data || []);
+      }
+
+      if (tipiPraticaResult.error) {
+        console.error('Errore caricamento tipi pratica:', tipiPraticaResult.error);
+      } else {
+        setTipiPratica(tipiPraticaResult.data || []);
       }
 
       setPratiche(praticheData || []);
@@ -359,7 +380,8 @@ export const ComuneCatastoPage: React.FC = () => {
               .select(`
                 *,
                 stato_info:stati_generali(id, descrizione, colore),
-                tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto)
+                tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto),
+                tipo_pratica_info:tipi_pratica(id, descrizione)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -383,7 +405,8 @@ export const ComuneCatastoPage: React.FC = () => {
               .select(`
                 *,
                 stato_info:stati_generali(id, descrizione, colore),
-                tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto)
+                tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto),
+                tipo_pratica_info:tipi_pratica(id, descrizione)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -453,7 +476,7 @@ export const ComuneCatastoPage: React.FC = () => {
       supabase.removeChannel(channel);
       setRealtimeConnected(false);
     };
-  }, [user?.id, stati, tipiIncarico]);
+  }, [user?.id, stati, tipiIncarico, tipiPratica]);
 
   const handleSearch = () => {
     fetchData();
@@ -826,6 +849,7 @@ export const ComuneCatastoPage: React.FC = () => {
         ...formData,
         stato: formData.stato ? parseInt(formData.stato) : null,
         tipo_incarico: formData.tipo_incarico ? parseInt(formData.tipo_incarico) : null,
+        tipo_pratica: formData.tipo_pratica ? parseInt(formData.tipo_pratica) : null,
         user_id: user?.id
       };
 
@@ -886,6 +910,8 @@ export const ComuneCatastoPage: React.FC = () => {
                   stato_info: dataToSave.stato ? stati.find(s => s.id === dataToSave.stato) : undefined,
                   tipo_incarico: dataToSave.tipo_incarico || undefined,
                   tipo_incarico_info: dataToSave.tipo_incarico ? tipiIncarico.find(t => t.id === dataToSave.tipo_incarico) : undefined,
+                  tipo_pratica: dataToSave.tipo_pratica ?? undefined,
+                  tipo_pratica_info: dataToSave.tipo_pratica ? tipiPratica.find(t => t.id === dataToSave.tipo_pratica) : undefined,
                   committente: dataToSave.committente,
                   proprieta: dataToSave.proprieta || null,
                   proprieta2: dataToSave.proprieta2 || null,
@@ -1006,6 +1032,7 @@ export const ComuneCatastoPage: React.FC = () => {
         telefono2: pratica.telefono2 || '',
         mail: pratica.mail || '',
         tipo_incarico: pratica.tipo_incarico?.toString() || '',
+        tipo_pratica: pratica.tipo_pratica?.toString() || '',
         comune: pratica.comune,
         catasto: pratica.catasto,
         fine_lavori: pratica.fine_lavori,
@@ -1028,6 +1055,7 @@ export const ComuneCatastoPage: React.FC = () => {
         telefono2: '',
         mail: '',
         tipo_incarico: '',
+        tipo_pratica: '',
         comune: false,
         catasto: false,
         fine_lavori: false,
@@ -1055,6 +1083,7 @@ export const ComuneCatastoPage: React.FC = () => {
       telefono2: '',
       mail: '',
       tipo_incarico: '',
+      tipo_pratica: '',
       comune: false,
       catasto: false,
       fine_lavori: false,
@@ -1192,7 +1221,7 @@ export const ComuneCatastoPage: React.FC = () => {
         {/* Filtri */}
         <div className="card space-y-4 dark:bg-gray-800 dark:border-gray-700">
           {/* Prima riga - Ricerca e dropdown */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Campo di ricerca */}
             <div className="relative">
               <input
@@ -1256,6 +1285,31 @@ export const ComuneCatastoPage: React.FC = () => {
               >
                 <option value="">-- Tutti i tipi di incarico --</option>
                 {tipiIncarico.map((tipo) => (
+                  <option key={tipo.id} value={tipo.id}>
+                    {tipo.descrizione}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+            </div>
+
+            {/* Filtro Tipi Pratica */}
+            <div className="relative">
+              <select
+                value={filtroTipoPratica}
+                onChange={(e) => {
+                  const newFiltroTipoPratica = e.target.value;
+                  setFiltroTipoPratica(newFiltroTipoPratica);
+                  setCurrentPage(1);
+                  fetchData({
+                    filtroTipoPratica: newFiltroTipoPratica,
+                    page: 1
+                  });
+                }}
+                className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="">-- Tutti i tipi di pratica --</option>
+                {tipiPratica.map((tipo) => (
                   <option key={tipo.id} value={tipo.id}>
                     {tipo.descrizione}
                   </option>
@@ -1405,6 +1459,9 @@ export const ComuneCatastoPage: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Tipo Incarico
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Tipo Pratica
+                  </th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Comune
                   </th>
@@ -1422,7 +1479,7 @@ export const ComuneCatastoPage: React.FC = () => {
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={10} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                       <div className="flex items-center justify-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                         <span className="ml-2">Caricamento...</span>
@@ -1431,7 +1488,7 @@ export const ComuneCatastoPage: React.FC = () => {
                   </tr>
                 ) : pratiche.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={10} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                       Nessuna pratica trovata
                     </td>
                   </tr>
@@ -1457,6 +1514,9 @@ export const ComuneCatastoPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                         {pratica.tipo_incarico_info?.descrizione || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {pratica.tipo_pratica_info?.descrizione || '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
@@ -1817,6 +1877,29 @@ export const ComuneCatastoPage: React.FC = () => {
                         >
                           <option value="">-- Seleziona tipo incarico --</option>
                           {tipiIncarico.map((tipo) => (
+                            <option key={tipo.id} value={tipo.id}>
+                              {tipo.descrizione}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+                      </div>
+                    </div>
+
+                    {/* Tipo Pratica */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Tipo Pratica
+                      </label>
+                      <div className="relative">
+                        <select
+                          name="tipo_pratica"
+                          value={formData.tipo_pratica}
+                          onChange={handleInputChange}
+                          className="input w-full pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                          <option value="">-- Seleziona tipo pratica --</option>
+                          {tipiPratica.map((tipo) => (
                             <option key={tipo.id} value={tipo.id}>
                               {tipo.descrizione}
                             </option>
