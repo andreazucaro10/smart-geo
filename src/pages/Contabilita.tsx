@@ -50,6 +50,7 @@ export const Contabilita: React.FC = () => {
     fatturaPerDetrazione: false
   });
   const [parametroTasse, setParametroTasse] = useState<number>(0.22); // Default 22%
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fattura: Fattura | null }>({ x: 0, y: 0, fattura: null });
 
   // Lista dei mesi
   const mesi = [
@@ -290,6 +291,23 @@ export const Contabilita: React.FC = () => {
       fetchFatture();
     }
   }, [user?.id, currentPage, recordsPerPage]);
+
+  // Chiudi menu contestuale quando si clicca fuori o si preme Escape
+  useEffect(() => {
+    if (!contextMenu.fattura) return;
+
+    const handleClick = () => setContextMenu({ x: 0, y: 0, fattura: null });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu({ x: 0, y: 0, fattura: null });
+    };
+
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu.fattura]);
 
   // Ricalcola i valori quando cambiano i parametri delle tasse
   useEffect(() => {
@@ -556,6 +574,20 @@ export const Contabilita: React.FC = () => {
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent, fattura: Fattura) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, fattura });
+  };
+
+  const handleContextMenuAction = (action: 'edit' | 'delete', fattura: Fattura) => {
+    setContextMenu({ x: 0, y: 0, fattura: null });
+    if (action === 'edit') {
+      handleEditFattura(fattura);
+    } else if (action === 'delete') {
+      handleDeleteFattura(fattura.id);
+    }
+  };
+
   const formatCurrency = (amount: number | null) => {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
@@ -721,15 +753,12 @@ export const Contabilita: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Guadagno Netto (€)
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Azioni
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Caricamento...</span>
@@ -738,7 +767,7 @@ export const Contabilita: React.FC = () => {
                 </tr>
               ) : fatture.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nessuna fattura trovata
                   </td>
                 </tr>
@@ -781,12 +810,15 @@ export const Contabilita: React.FC = () => {
                       <React.Fragment key={fattura.id}>
                         {showSeparator && (
                           <tr className="bg-gray-100 dark:bg-gray-700/50">
-                            <td colSpan={11} className="px-6 py-2">
+                            <td colSpan={10} className="px-6 py-2">
                               <div className="border-t border-gray-300 dark:border-gray-600"></div>
                             </td>
                           </tr>
                         )}
-                        <tr className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${fattura.fattura_per_detrazione ? 'bg-red-50 dark:bg-red-900/20' : (index % 2 === 0 ? '' : 'bg-gray-50 dark:bg-gray-700/50')}`}>
+                        <tr 
+                          className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${fattura.fattura_per_detrazione ? 'bg-red-50 dark:bg-red-900/20' : (index % 2 === 0 ? '' : 'bg-gray-50 dark:bg-gray-700/50')}`}
+                          onContextMenu={(e) => handleContextMenu(e, fattura)}
+                        >
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {fattura.mese_fattura}
                           </td>
@@ -822,24 +854,6 @@ export const Contabilita: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600 dark:text-green-400">
                             {formatCurrency(fattura.guadagno_netto)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleEditFattura(fattura)}
-                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-                                title="Modifica"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFattura(fattura.id)}
-                                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors"
-                                title="Elimina"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
                         </tr>
                         {/* Riga totali mensili */}
                         {isLastInMonth && (
@@ -871,7 +885,6 @@ export const Contabilita: React.FC = () => {
                             <td className="px-6 py-3 text-sm font-bold text-green-700 dark:text-green-400">
                               {formatCurrency(mTotals.guadagnoNetto)}
                             </td>
-                            <td className="px-6 py-3"></td>
                           </tr>
                         )}
                       </React.Fragment>
@@ -911,7 +924,6 @@ export const Contabilita: React.FC = () => {
                   <td className="px-6 py-4 text-sm font-bold text-green-700 dark:text-green-400">
                     {formatCurrency(totals.guadagnoNetto)}
                   </td>
-                  <td className="px-6 py-4"></td>
                 </tr>
               </tfoot>
             )}
@@ -1139,6 +1151,31 @@ export const Contabilita: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Menu Contestuale */}
+      {contextMenu.fattura && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[180px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleContextMenuAction('edit', contextMenu.fattura!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Edit className="w-4 h-4 text-blue-500" />
+            Modifica
+          </button>
+          <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+          <button
+            onClick={() => handleContextMenuAction('delete', contextMenu.fattura!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Elimina
+          </button>
         </div>
       )}
     </div>

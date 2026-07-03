@@ -49,6 +49,7 @@ export interface TipoIncarico {
   descrizione: string;
   comune: boolean;
   catasto: boolean;
+  ape: boolean;
   created_at: string;
   updated_at: string;
 }

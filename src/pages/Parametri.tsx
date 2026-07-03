@@ -29,6 +29,7 @@ interface TipoIncarico {
   descrizione: string;
   comune: boolean;
   catasto: boolean;
+  ape: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -94,7 +95,7 @@ export const Parametri: React.FC = () => {
   const [tipiIncarico, setTipiIncarico] = useState<TipoIncarico[]>([]);
   const [showModalTipi, setShowModalTipi] = useState(false);
   const [editingTipo, setEditingTipo] = useState<TipoIncarico | null>(null);
-  const [formTipi, setFormTipi] = useState({ descrizione: '', comune: false, catasto: false });
+  const [formTipi, setFormTipi] = useState({ descrizione: '', comune: false, catasto: false, ape: false });
 
   // Stati per Categorie Planner
   const [categoriePlanner, setCategoriePlanner] = useState<CategoriaPlanner[]>([]);
@@ -358,7 +359,7 @@ export const Parametri: React.FC = () => {
 
       setShowModalTipi(false);
       setEditingTipo(null);
-      setFormTipi({ descrizione: '', comune: false, catasto: false });
+      setFormTipi({ descrizione: '', comune: false, catasto: false, ape: false });
       loadTipiIncarico();
     } catch (error) {
       console.error('Errore:', error);
@@ -976,6 +977,7 @@ export const Parametri: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Descrizione</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Comune</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Catasto</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">APE</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data creazione</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ultima modifica</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Azioni</th>
@@ -992,6 +994,9 @@ export const Parametri: React.FC = () => {
                   <td className="px-4 py-3 text-center">
                     {tipo.catasto ? <Check className="w-4 h-4 text-green-600 dark:text-green-400 mx-auto" /> : <X className="w-4 h-4 text-gray-400 dark:text-gray-500 mx-auto" />}
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    {tipo.ape ? <Check className="w-4 h-4 text-green-600 dark:text-green-400 mx-auto" /> : <X className="w-4 h-4 text-gray-400 dark:text-gray-500 mx-auto" />}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {new Date(tipo.created_at).toLocaleDateString('it-IT')}
                   </td>
@@ -1006,7 +1011,8 @@ export const Parametri: React.FC = () => {
                           setFormTipi({
                             descrizione: tipo.descrizione,
                             comune: tipo.comune,
-                            catasto: tipo.catasto
+                            catasto: tipo.catasto,
+                            ape: tipo.ape
                           });
                           setShowModalTipi(true);
                         }}
@@ -1430,7 +1436,7 @@ export const Parametri: React.FC = () => {
                 onClick={() => {
                   setShowModalTipi(false);
                   setEditingTipo(null);
-                  setFormTipi({ descrizione: '', comune: false, catasto: false });
+                  setFormTipi({ descrizione: '', comune: false, catasto: false, ape: false });
                 }}
                 className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
@@ -1467,6 +1473,15 @@ export const Parametri: React.FC = () => {
                   />
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Catasto</span>
                 </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formTipi.ape}
+                    onChange={(e) => setFormTipi(prev => ({ ...prev, ape: e.target.checked }))}
+                    className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded focus:ring-blue-500 dark:focus:ring-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">APE</span>
+                </label>
               </div>
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
@@ -1474,7 +1489,7 @@ export const Parametri: React.FC = () => {
                 onClick={() => {
                   setShowModalTipi(false);
                   setEditingTipo(null);
-                  setFormTipi({ descrizione: '', comune: false, catasto: false });
+                  setFormTipi({ descrizione: '', comune: false, catasto: false, ape: false });
                 }}
                 className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
               >

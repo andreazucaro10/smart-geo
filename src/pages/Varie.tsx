@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Search, ChevronDown, Edit, Trash2, Check, X } from 'lucide-react';
+import { Plus, Search, ChevronDown, Edit, Trash2, Check, X, Copy, ArrowRightCircle, User } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
-import type { Varie, StatoGenerale } from '../types';
+import { RubricaAutocomplete } from '../components/RubricaAutocomplete';
+import { syncRubricaFromPratica } from '../utils/rubricaSync';
+import type { Varie, StatoGenerale, TipoIncarico, Rubrica } from '../types';
 import toast from 'react-hot-toast';
 
 export const VariePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [varie, setVarie] = useState<Varie[]>([]);
   const [stati, setStati] = useState<StatoGenerale[]>([]);
+  const [tipiIncarico, setTipiIncarico] = useState<TipoIncarico[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
@@ -21,6 +24,10 @@ export const VariePage: React.FC = () => {
   const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editingVaria, setEditingVaria] = useState<Varie | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; varia: Varie | null }>({ x: 0, y: 0, varia: null });
+  const [showContextMenuActionModal, setShowContextMenuActionModal] = useState<'status' | 'contatto' | null>(null);
+  const [selectedVariaForContextMenu, setSelectedVariaForContextMenu] = useState<Varie | null>(null);
+  const [newStatusForContextMenu, setNewStatusForContextMenu] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     committente: '',
@@ -96,6 +103,23 @@ export const VariePage: React.FC = () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
+
+  // Chiusura menu contestuale al click esterno o tasto ESC
+  useEffect(() => {
+    if (!contextMenu.varia) return;
+
+    const handleClick = () => setContextMenu({ x: 0, y: 0, varia: null });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu({ x: 0, y: 0, varia: null });
+    };
+
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu.varia]);
 
   const fetchData = async (customFilters?: {
     searchTerm?: string;
@@ -204,6 +228,18 @@ export const VariePage: React.FC = () => {
         setStati(statiData || []);
       }
 
+      // Carica tipi incarico
+      const { data: tipiData, error: tipiError } = await supabase
+        .from('tipi_incarico')
+        .select('*')
+        .order('descrizione');
+
+      if (tipiError) {
+        console.error('Errore caricamento tipi incarico:', tipiError);
+      } else {
+        setTipiIncarico(tipiData || []);
+      }
+
       setVarie(varieData || []);
     } catch (error) {
       console.error('Errore:', error);
@@ -254,6 +290,79 @@ export const VariePage: React.FC = () => {
       filtriAttivi: newFiltriAttivi,
       page: 1
     });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, varia: Varie) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, varia });
+  };
+
+  const handleContextMenuAction = (action: 'edit' | 'status' | 'contact' | 'duplicate' | 'delete', varia: Varie) => {
+    setContextMenu({ x: 0, y: 0, varia: null });
+    if (action === 'edit') {
+      openModal(varia);
+    } else if (action === 'status') {
+      setSelectedVariaForContextMenu(varia);
+      setNewStatusForContextMenu(varia.registrazione?.toString() || '');
+      setShowContextMenuActionModal('status');
+    } else if (action === 'contact') {
+      setSelectedVariaForContextMenu(varia);
+      setShowContextMenuActionModal('contatto');
+    } else if (action === 'duplicate') {
+      handleDuplicateVaria(varia);
+    } else if (action === 'delete') {
+      handleDeleteVaria(varia.id);
+    }
+  };
+
+  const handleChangeStatusFromContextMenu = async () => {
+    if (!selectedVariaForContextMenu || !newStatusForContextMenu) return;
+    
+    const { error } = await supabase
+      .from('varie')
+      .update({ registrazione: parseInt(newStatusForContextMenu) })
+      .eq('id', selectedVariaForContextMenu.id)
+      .eq('user_id', user?.id);
+      
+    if (error) {
+      toast.error('Errore nel cambio stato');
+    } else {
+      toast.success('Stato aggiornato con successo');
+      setShowContextMenuActionModal(null);
+      setSelectedVariaForContextMenu(null);
+      fetchData();
+    }
+  };
+
+  const handleDuplicateVaria = async (varia: Varie) => {
+    try {
+      const { id, created_at, updated_at, progressivo, ...variaData } = varia;
+      
+      const duplicatedData = {
+        ...variaData,
+        committente: `${variaData.committente}`,
+        registrazione: 1,
+        pagamento: false,
+        created_at: new Date().toISOString(),
+        user_id: user?.id
+      };
+
+      const { error } = await supabase
+        .from('varie')
+        .insert([duplicatedData]);
+
+      if (error) {
+        console.error('Errore duplicazione varia:', error);
+        toast.error('Errore nella duplicazione della varia');
+        return;
+      }
+
+      await fetchData();
+      toast.success('Varia duplicata con successo');
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nella duplicazione della varia');
+    }
   };
 
   const handlePageChange = (page: number) => {
@@ -430,7 +539,52 @@ export const VariePage: React.FC = () => {
         }
 
         toast.success('Varia creata con successo');
+
+        // Creazione automatica pratica APE se il tipo di incarico ha il flag ape
+        if (dataToSave.tipo_incarico) {
+          const tipoIncaricoTrovato = tipiIncarico.find(
+            t => t.descrizione.toLowerCase() === dataToSave.tipo_incarico!.toLowerCase()
+          );
+          if (tipoIncaricoTrovato?.ape) {
+            try {
+              const { error: apeError } = await supabase
+                .from('ape')
+                .insert([{
+                  committente: formData.committente.trim(),
+                  proprieta: formData.proprieta.trim() || null,
+                  proprieta2: formData.proprieta2.trim() || null,
+                  indirizzo: formData.indirizzo.trim() || null,
+                  citta: formData.citta.trim() || null,
+                  mail: formData.mail.trim() || null,
+                  telefono: formData.telefono.trim() || null,
+                  telefono2: formData.telefono2.trim() || null,
+                  note: formData.note.trim() || null,
+                  registrazione: 1,
+                  progressivo: '',
+                  pagamento: false,
+                  user_id: user?.id
+                }]);
+
+              if (apeError) {
+                console.error('Errore creazione pratica APE:', apeError);
+                toast.error('Varia creata ma errore nella creazione della pratica APE');
+              } else {
+                toast.success('Pratica APE creata automaticamente');
+              }
+            } catch (apeError) {
+              console.error('Errore creazione pratica APE:', apeError);
+            }
+          }
+        }
       }
+
+      // Sync contatto con rubrica
+      await syncRubricaFromPratica(
+        formData.proprieta,
+        formData.telefono,
+        formData.mail,
+        formData.committente
+      );
 
       closeModal();
       fetchData();
@@ -631,21 +785,16 @@ export const VariePage: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tipo Incarico</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Committente</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Proprietario</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Indirizzo</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Città</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Telefono</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pagamento</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acconto</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Omaggio</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Note</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Azioni</th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading || authLoading ? (
                 <tr>
-                  <td colSpan={13} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">
@@ -656,13 +805,13 @@ export const VariePage: React.FC = () => {
                 </tr>
               ) : varie.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nessuna varia trovata
                   </td>
                 </tr>
               ) : (
                 varie.map((varia) => (
-                  <tr key={varia.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <tr key={varia.id} className="hover:bg-gray-50 dark:hover:bg-gray-700" onContextMenu={(e) => handleContextMenu(e, varia)}>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(varia.registrazione_info)}`}
@@ -674,10 +823,6 @@ export const VariePage: React.FC = () => {
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.tipo_incarico || '-'}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{varia.committente}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{combineProprieta(varia.proprieta, varia.proprieta2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.indirizzo || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.citta || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{combineTelefoni(varia.telefono, varia.telefono2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{varia.mail || '-'}</td>
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleField(varia, 'pagamento')}
@@ -706,24 +851,6 @@ export const VariePage: React.FC = () => {
                       </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">{varia.note || '-'}</td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => openModal(varia)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
-                          title="Modifica"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteVaria(varia.id)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors p-1"
-                          title="Elimina"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
                   </tr>
                 ))
               )}
@@ -865,13 +992,18 @@ export const VariePage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Proprietario
                     </label>
-                    <input
-                      type="text"
-                      name="proprieta"
+                    <RubricaAutocomplete
                       value={formData.proprieta}
-                      onChange={handleInputChange}
+                      onChange={(val) => setFormData(prev => ({ ...prev, proprieta: val }))}
+                      onSelect={(contatto: Rubrica) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          proprieta: contatto.nominativo,
+                          telefono: contatto.telefono || '',
+                          mail: contatto.email || ''
+                        }));
+                      }}
                       placeholder="Nome proprietario"
-                      className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                     />
                   </div>
 
@@ -1122,6 +1254,136 @@ export const VariePage: React.FC = () => {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Menu Contestuale */}
+      {contextMenu.varia && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[200px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleContextMenuAction('edit', contextMenu.varia!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Edit className="w-4 h-4 text-blue-500" />
+            Modifica
+          </button>
+          <button
+            onClick={() => handleContextMenuAction('status', contextMenu.varia!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowRightCircle className="w-4 h-4 text-yellow-500" />
+            Cambia stato
+          </button>
+          <button
+            onClick={() => handleContextMenuAction('contact', contextMenu.varia!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <User className="w-4 h-4 text-purple-500" />
+            Contatto
+          </button>
+          <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+          <button
+            onClick={() => handleContextMenuAction('duplicate', contextMenu.varia!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Copy className="w-4 h-4 text-green-500" />
+            Duplica
+          </button>
+          <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+          <button
+            onClick={() => handleContextMenuAction('delete', contextMenu.varia!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Elimina
+          </button>
+        </div>
+      )}
+
+      {/* Modal Cambia Stato da Menu Contestuale */}
+      {showContextMenuActionModal === 'status' && selectedVariaForContextMenu && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Cambia Stato - {selectedVariaForContextMenu.committente}
+            </h3>
+            <select
+              value={newStatusForContextMenu}
+              onChange={(e) => setNewStatusForContextMenu(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleziona stato</option>
+              {stati.map((stato) => (
+                <option key={stato.id} value={stato.id}>
+                  {stato.descrizione}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowContextMenuActionModal(null);
+                  setSelectedVariaForContextMenu(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleChangeStatusFromContextMenu}
+                disabled={!newStatusForContextMenu}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Conferma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Contatto da Menu Contestuale */}
+      {showContextMenuActionModal === 'contatto' && selectedVariaForContextMenu && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Contatto - {selectedVariaForContextMenu.committente}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proprietario</label>
+                <p className="text-gray-900 dark:text-white">{selectedVariaForContextMenu.proprieta || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Telefono</label>
+                <p className="text-gray-900 dark:text-white">{selectedVariaForContextMenu.telefono || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <p className="text-gray-900 dark:text-white">{selectedVariaForContextMenu.mail || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indirizzo</label>
+                <p className="text-gray-900 dark:text-white">
+                  {selectedVariaForContextMenu.indirizzo || '-'}{selectedVariaForContextMenu.citta ? `, ${selectedVariaForContextMenu.citta}` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowContextMenuActionModal(null);
+                  setSelectedVariaForContextMenu(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Chiudi
+              </button>
+            </div>
           </div>
         </div>
       )}

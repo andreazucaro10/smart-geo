@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Search, ChevronDown, Edit, Trash2, Check, X } from 'lucide-react';
+import { Plus, Search, ChevronDown, Edit, Trash2, Check, X, Copy, ArrowRightCircle, User } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
-import type { ComuneCatasto, StatoGenerale, TipoIncarico } from '../types';
+import { RubricaAutocomplete } from '../components/RubricaAutocomplete';
+import { syncRubricaFromPratica } from '../utils/rubricaSync';
+import type { ComuneCatasto, StatoGenerale, TipoIncarico, Rubrica } from '../types';
 import toast from 'react-hot-toast';
 
 export const ComuneCatastoPage: React.FC = () => {
@@ -14,7 +16,6 @@ export const ComuneCatastoPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroTipoIncarico, setFiltroTipoIncarico] = useState('');
@@ -38,12 +39,12 @@ export const ComuneCatastoPage: React.FC = () => {
   });
   const [totalRecords, setTotalRecords] = useState(0);
   const [showModal, setShowModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
   const [editingPratica, setEditingPratica] = useState<ComuneCatasto | null>(null);
-  const [duplicatingPratica, setDuplicatingPratica] = useState<ComuneCatasto | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; pratica: ComuneCatasto | null }>({ x: 0, y: 0, pratica: null });
+  const [showContextMenuActionModal, setShowContextMenuActionModal] = useState<'status' | 'contatto' | null>(null);
+  const [selectedPraticaForContextMenu, setSelectedPraticaForContextMenu] = useState<ComuneCatasto | null>(null);
+  const [newStatusForContextMenu, setNewStatusForContextMenu] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
-  const [newStatus, setNewStatus] = useState<string>('');
-  const [confirmStatusChange, setConfirmStatusChange] = useState(false);
   const [formData, setFormData] = useState({
     committente: '',
     stato: '',
@@ -154,6 +155,23 @@ export const ComuneCatastoPage: React.FC = () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
+
+  // Chiusura menu contestuale al click esterno o tasto ESC
+  useEffect(() => {
+    if (!contextMenu.pratica) return;
+
+    const handleClick = () => setContextMenu({ x: 0, y: 0, pratica: null });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu({ x: 0, y: 0, pratica: null });
+    };
+
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu.pratica]);
 
   const fetchData = async (customFilters?: {
     searchTerm?: string;
@@ -438,7 +456,6 @@ export const ComuneCatastoPage: React.FC = () => {
   }, [user?.id, stati, tipiIncarico]);
 
   const handleSearch = () => {
-    setSelectedRows(new Set()); // Resetta la selezione quando si effettua una ricerca
     fetchData();
   };
 
@@ -460,15 +477,13 @@ export const ComuneCatastoPage: React.FC = () => {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    setSelectedRows(new Set()); // Resetta la selezione quando si cambia pagina
     fetchData({ page });
   };
 
   const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
     setRecordsPerPage(newRecordsPerPage);
     localStorage.setItem('comune-catasto-records-per-page', newRecordsPerPage.toString());
-    setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
-    setSelectedRows(new Set()); // Resetta la selezione quando si cambia il numero di record
+    setCurrentPage(1);
     fetchData({
       perPage: newRecordsPerPage,
       page: 1
@@ -644,13 +659,6 @@ export const ComuneCatastoPage: React.FC = () => {
         return;
       }
 
-      // Rimuovi l'ID dalla selezione se la pratica eliminata era selezionata
-      setSelectedRows(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-
       toast.success('Pratica eliminata con successo');
       fetchData();
     } catch (error) {
@@ -698,26 +706,76 @@ export const ComuneCatastoPage: React.FC = () => {
     return `${proprieta1} / ${proprieta2}`;
   };
 
-  const handleRowSelection = (id: number) => {
-    setSelectedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
+  const handleContextMenu = (e: React.MouseEvent, pratica: ComuneCatasto) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, pratica });
   };
 
+  const handleContextMenuAction = (action: 'edit' | 'status' | 'contact' | 'duplicate' | 'delete', pratica: ComuneCatasto) => {
+    setContextMenu({ x: 0, y: 0, pratica: null });
+    if (action === 'edit') {
+      openModal(pratica);
+    } else if (action === 'status') {
+      setSelectedPraticaForContextMenu(pratica);
+      setNewStatusForContextMenu(pratica.stato?.toString() || '');
+      setShowContextMenuActionModal('status');
+    } else if (action === 'contact') {
+      setSelectedPraticaForContextMenu(pratica);
+      setShowContextMenuActionModal('contatto');
+    } else if (action === 'duplicate') {
+      handleDuplicatePratica(pratica);
+    } else if (action === 'delete') {
+      handleDeletePratica(pratica.id);
+    }
+  };
 
-  const handleSelectAll = () => {
-    if (selectedRows.size === pratiche.length) {
-      // Se tutte le righe sono selezionate, deseleziona tutto
-      setSelectedRows(new Set());
+  const handleChangeStatusFromContextMenu = async () => {
+    if (!selectedPraticaForContextMenu || !newStatusForContextMenu) return;
+    
+    const { error } = await supabase
+      .from('comune_catasto')
+      .update({ stato: parseInt(newStatusForContextMenu) })
+      .eq('id', selectedPraticaForContextMenu.id)
+      .eq('user_id', user?.id);
+      
+    if (error) {
+      toast.error('Errore nel cambio stato');
     } else {
-      // Altrimenti seleziona tutte le righe della pagina corrente
-      setSelectedRows(new Set(pratiche.map(pratica => pratica.id)));
+      toast.success('Stato aggiornato con successo');
+      setShowContextMenuActionModal(null);
+      setSelectedPraticaForContextMenu(null);
+      fetchData();
+    }
+  };
+
+  const handleDuplicatePratica = async (pratica: ComuneCatasto) => {
+    try {
+      const { id, created_at, updated_at, progressivo, ...praticaData } = pratica;
+      
+      const duplicatedData = {
+        ...praticaData,
+        committente: `${praticaData.committente}`,
+        stato: 1,
+        pagamento: false,
+        created_at: new Date().toISOString(),
+        user_id: user?.id
+      };
+
+      const { error } = await supabase
+        .from('comune_catasto')
+        .insert([duplicatedData]);
+
+      if (error) {
+        console.error('Errore duplicazione pratica:', error);
+        toast.error('Errore nella duplicazione della pratica');
+        return;
+      }
+
+      await fetchData();
+      toast.success('Pratica duplicata con successo');
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nella duplicazione della pratica');
     }
   };
 
@@ -880,7 +938,47 @@ export const ComuneCatastoPage: React.FC = () => {
           }
         }
         toast.success(messaggioSuccesso);
+
+        // Creazione automatica pratica APE se il tipo di incarico ha il flag ape
+        if (tipoIncaricoSelezionato?.ape) {
+          try {
+            const { error: apeError } = await supabase
+              .from('ape')
+              .insert([{
+                committente: formData.committente.trim(),
+                proprieta: formData.proprieta.trim() || null,
+                proprieta2: formData.proprieta2.trim() || null,
+                indirizzo: formData.indirizzo.trim() || null,
+                citta: formData.citta.trim() || null,
+                mail: formData.mail.trim() || null,
+                telefono: formData.telefono.trim() || null,
+                telefono2: formData.telefono2.trim() || null,
+                note: formData.note.trim() || null,
+                registrazione: 1,
+                progressivo: '',
+                pagamento: false,
+                user_id: user?.id
+              }]);
+
+            if (apeError) {
+              console.error('Errore creazione pratica APE:', apeError);
+              toast.error('Pratica creata ma errore nella creazione della pratica APE');
+            } else {
+              toast.success('Pratica APE creata automaticamente');
+            }
+          } catch (apeError) {
+            console.error('Errore creazione pratica APE:', apeError);
+          }
+        }
       }
+
+      // Sync contatto con rubrica
+      await syncRubricaFromPratica(
+        formData.proprieta,
+        formData.telefono,
+        formData.mail,
+        formData.committente
+      );
 
       closeModal();
       // Forza il refresh del componente dopo il salvataggio
@@ -893,33 +991,8 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
-  const openModal = (pratica?: ComuneCatasto, praticaToDuplicate?: ComuneCatasto) => {
-    if (praticaToDuplicate || duplicatingPratica) {
-      // Modalità duplicazione - usa il parametro diretto se disponibile, altrimenti lo state
-      const sourcePratica = praticaToDuplicate || duplicatingPratica;
-
-      setEditingPratica(null);
-
-      const newFormData = {
-        committente: sourcePratica!.committente,
-        stato: sourcePratica!.stato?.toString() || '',
-        proprieta: sourcePratica!.proprieta || '',
-        proprieta2: sourcePratica!.proprieta2 || '',
-        indirizzo: sourcePratica!.indirizzo || '',
-        citta: sourcePratica!.citta || '',
-        telefono: sourcePratica!.telefono || '',
-        telefono2: sourcePratica!.telefono2 || '',
-        mail: sourcePratica!.mail || '',
-        tipo_incarico: sourcePratica!.tipo_incarico?.toString() || '',
-        comune: sourcePratica!.comune,
-        catasto: sourcePratica!.catasto,
-        fine_lavori: sourcePratica!.fine_lavori,
-        pagamento: sourcePratica!.pagamento,
-        note: sourcePratica!.note || ''
-      };
-
-      setFormData(newFormData);
-    } else if (pratica) {
+  const openModal = (pratica?: ComuneCatasto) => {
+    if (pratica) {
       // Modalità modifica
       setEditingPratica(pratica);
       const editFormData = {
@@ -966,11 +1039,6 @@ export const ComuneCatastoPage: React.FC = () => {
     }
 
     setShowModal(true);
-
-    // Reset duplicatingPratica after modal is opened to ensure proper cleanup
-    if (duplicatingPratica || praticaToDuplicate) {
-      setDuplicatingPratica(null);
-    }
   };
 
   const closeModal = () => {
@@ -1316,69 +1384,12 @@ export const ComuneCatastoPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Sezione azioni multiple (appare solo quando ci sono righe selezionate) */}
-        {selectedRows.size > 0 && (
-          <div className="card bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 dark:border-blue-400">
-            <div className="p-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  {selectedRows.size} righe selezionate
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    className="btn btn-secondary flex items-center gap-2"
-                    onClick={() => {
-                      setShowStatusModal(true);
-                      setConfirmStatusChange(false);
-                    }}
-                  >
-                    Cambia stato
-                  </button>
-                  <button
-                    className="btn btn-primary flex items-center gap-2"
-                    disabled={selectedRows.size !== 1}
-                    onClick={() => {
-                      const selectedPratica = pratiche.find(p => selectedRows.has(p.id));
-                      if (selectedPratica) {
-                        openModal(undefined, selectedPratica);
-                      }
-                    }}
-                  >
-                    Duplica pratica
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Tabella - Container con altezza flessibile e scroll interno */}
         <div className="card p-0 dark:bg-gray-800 dark:border-gray-700 flex-1" style={{ height: 'calc(100vh - 400px)', overflow: 'hidden' }}>
           <div className="overflow-x-auto h-full overflow-y-auto">
             <table className="w-full" style={{ minHeight: '400px' }}>
               <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                 <tr>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    <label className="flex items-center justify-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.size === pratiche.length && pratiche.length > 0}
-                        onChange={handleSelectAll}
-                        className="sr-only"
-                        title={selectedRows.size === pratiche.length ? "Deseleziona tutto" : "Seleziona tutto"}
-                      />
-                      <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${selectedRows.size === pratiche.length && pratiche.length > 0
-                          ? 'border-blue-600 bg-blue-600 dark:border-blue-400 dark:bg-blue-400'
-                          : 'border-gray-300 dark:border-gray-600 bg-transparent'
-                        }`}>
-                        {selectedRows.size === pratiche.length && pratiche.length > 0 && (
-                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                    </label>
-                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Stato
                   </th>
@@ -1386,19 +1397,7 @@ export const ComuneCatastoPage: React.FC = () => {
                     Committente
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Indirizzo
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Città
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Proprietà
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Telefono
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Mail
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Note
@@ -1418,15 +1417,12 @@ export const ComuneCatastoPage: React.FC = () => {
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Pagamento
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Azioni
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td colSpan={14} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                       <div className="flex items-center justify-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                         <span className="ml-2">Caricamento...</span>
@@ -1435,33 +1431,13 @@ export const ComuneCatastoPage: React.FC = () => {
                   </tr>
                 ) : pratiche.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                       Nessuna pratica trovata
                     </td>
                   </tr>
                 ) : (
                   pratiche.map((pratica) => (
-                    <tr key={pratica.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-4 py-3 text-center">
-                        <label className="flex items-center justify-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.has(pratica.id)}
-                            onChange={() => handleRowSelection(pratica.id)}
-                            className="sr-only"
-                          />
-                          <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${selectedRows.has(pratica.id)
-                              ? 'border-blue-600 bg-blue-600 dark:border-blue-400 dark:bg-blue-400'
-                              : 'border-gray-300 dark:border-gray-600 bg-transparent'
-                            }`}>
-                            {selectedRows.has(pratica.id) && (
-                              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                          </div>
-                        </label>
-                      </td>
+                    <tr key={pratica.id} className="hover:bg-gray-50 dark:hover:bg-gray-700" onContextMenu={(e) => handleContextMenu(e, pratica)}>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(pratica.stato_info)}`}
@@ -1474,19 +1450,7 @@ export const ComuneCatastoPage: React.FC = () => {
                         {pratica.committente}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                        {pratica.indirizzo || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                        {pratica.citta || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                         {combineProprieta(pratica.proprieta, pratica.proprieta2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                        {combineTelefoni(pratica.telefono, pratica.telefono2)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                        {pratica.mail || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
                         {pratica.note || '-'}
@@ -1553,24 +1517,6 @@ export const ComuneCatastoPage: React.FC = () => {
                         >
                           {renderToggleButton(pratica.pagamento, true)}
                         </button>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => openModal(pratica)}
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
-                            title="Modifica"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeletePratica(pratica.id)}
-                            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors p-1"
-                            title="Elimina"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   ))
@@ -1749,13 +1695,18 @@ export const ComuneCatastoPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Proprietà
                       </label>
-                      <input
-                        type="text"
-                        name="proprieta"
+                      <RubricaAutocomplete
                         value={formData.proprieta}
-                        onChange={handleInputChange}
+                        onChange={(val) => setFormData(prev => ({ ...prev, proprieta: val }))}
+                        onSelect={(contatto: Rubrica) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            proprieta: contatto.nominativo,
+                            telefono: contatto.telefono || '',
+                            mail: contatto.email || ''
+                          }));
+                        }}
                         placeholder="Nome proprietà"
-                        className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                       />
                     </div>
 
@@ -2047,149 +1998,137 @@ export const ComuneCatastoPage: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Modal Cambio Stato */}
-        {showStatusModal && (
-          <div className="modal-overlay">
-            <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md modal-scroll-container">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                  {confirmStatusChange ? 'Conferma Cambio Stato' : 'Seleziona Nuovo Stato'}
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowStatusModal(false);
-                    setConfirmStatusChange(false);
-                    setNewStatus('');
-                  }}
-                  className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
+      {/* Menu Contestuale */}
+      {contextMenu.pratica && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[200px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleContextMenuAction('edit', contextMenu.pratica!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Edit className="w-4 h-4 text-blue-500" />
+            Modifica
+          </button>
+          <button
+            onClick={() => handleContextMenuAction('status', contextMenu.pratica!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowRightCircle className="w-4 h-4 text-yellow-500" />
+            Cambia stato
+          </button>
+          <button
+            onClick={() => handleContextMenuAction('contact', contextMenu.pratica!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <User className="w-4 h-4 text-purple-500" />
+            Contatto
+          </button>
+          <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+          <button
+            onClick={() => handleContextMenuAction('duplicate', contextMenu.pratica!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Copy className="w-4 h-4 text-green-500" />
+            Duplica
+          </button>
+          <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+          <button
+            onClick={() => handleContextMenuAction('delete', contextMenu.pratica!)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Elimina
+          </button>
+        </div>
+      )}
 
-              <div className="p-6">
-                {!confirmStatusChange ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Nuovo Stato
-                      </label>
-                      <div className="relative">
-                        <select
-                          value={newStatus}
-                          onChange={(e) => setNewStatus(e.target.value)}
-                          className="input w-full pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        >
-                          <option value="">-- Seleziona stato --</option>
-                          {stati.map((stato) => (
-                            <option key={stato.id} value={stato.id.toString()}>
-                              {stato.descrizione}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Selezionando un nuovo stato verranno modificate {selectedRows.size} pratiche.
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowStatusModal(false);
-                          setNewStatus('');
-                        }}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                      >
-                        Annulla
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmStatusChange(true)}
-                        disabled={!newStatus}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Continua
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <div className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                        Conferma Cambio Stato
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        Stai per cambiare lo stato di {selectedRows.size} pratiche a:
-                      </div>
-                      <div className="inline-flex px-4 py-2 text-sm font-semibold rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        {stati.find(s => s.id.toString() === newStatus)?.descrizione || 'N/A'}
-                      </div>
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setConfirmStatusChange(false)}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                      >
-                        Indietro
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            // Update all selected practices
-                            const updates = Array.from(selectedRows).map(async (id) => {
-                              const { error } = await supabase
-                                .from('comune_catasto')
-                                .update({ stato: parseInt(newStatus) })
-                                .eq('id', id)
-                                .eq('user_id', user?.id);
-
-                              if (error) {
-                                throw error;
-                              }
-                            });
-
-                            await Promise.all(updates);
-
-                            // Aggiornamento locale immediato per feedback visivo istantaneo
-                            const newStatoInfo = stati.find(s => s.id === parseInt(newStatus));
-                            setPratiche(prev =>
-                              prev.map(pratica =>
-                                selectedRows.has(pratica.id)
-                                  ? {
-                                    ...pratica,
-                                    stato: parseInt(newStatus),
-                                    stato_info: newStatoInfo || pratica.stato_info
-                                  }
-                                  : pratica
-                              )
-                            );
-
-                            toast.success(`Stato modificato per ${selectedRows.size} pratiche`);
-                            setShowStatusModal(false);
-                            setNewStatus('');
-                            setSelectedRows(new Set());
-                          } catch (error) {
-                            console.error('Errore nel cambio stato:', error);
-                            toast.error('Errore nel cambio stato');
-                          }
-                        }}
-                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                      >
-                        Conferma
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+      {/* Modal Cambia Stato da Menu Contestuale */}
+      {showContextMenuActionModal === 'status' && selectedPraticaForContextMenu && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Cambia Stato - {selectedPraticaForContextMenu.committente}
+            </h3>
+            <select
+              value={newStatusForContextMenu}
+              onChange={(e) => setNewStatusForContextMenu(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleziona stato</option>
+              {stati.map((stato) => (
+                <option key={stato.id} value={stato.id}>
+                  {stato.descrizione}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowContextMenuActionModal(null);
+                  setSelectedPraticaForContextMenu(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleChangeStatusFromContextMenu}
+                disabled={!newStatusForContextMenu}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Conferma
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Modal Contatto da Menu Contestuale */}
+      {showContextMenuActionModal === 'contatto' && selectedPraticaForContextMenu && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Contatto - {selectedPraticaForContextMenu.committente}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proprietario</label>
+                <p className="text-gray-900 dark:text-white">{selectedPraticaForContextMenu.proprieta || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Telefono</label>
+                <p className="text-gray-900 dark:text-white">{selectedPraticaForContextMenu.telefono || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <p className="text-gray-900 dark:text-white">{selectedPraticaForContextMenu.mail || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indirizzo</label>
+                <p className="text-gray-900 dark:text-white">
+                  {selectedPraticaForContextMenu.indirizzo || '-'}{selectedPraticaForContextMenu.citta ? `, ${selectedPraticaForContextMenu.citta}` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowContextMenuActionModal(null);
+                  setSelectedPraticaForContextMenu(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
