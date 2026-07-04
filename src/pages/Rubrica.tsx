@@ -8,7 +8,7 @@ export const Rubrica: React.FC = () => {
   const [contatti, setContatti] = useState<RubricaType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [soloAttivi, setSoloAttivi] = useState(true);
+  const [soloAttivi, setSoloAttivi] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingContatto, setEditingContatto] = useState<RubricaType | null>(null);
   const [formData, setFormData] = useState({

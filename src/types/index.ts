@@ -25,6 +25,7 @@ export interface StatoGenerale {
   descrizione: string;
   colore: string;
   ordinamento: number;
+  filtro_non_pagata: number;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ export interface StatoApe {
   descrizione: string;
   colore: string;
   ordinamento: number;
+  filtro_non_pagata: number;
   created_at: string;
   updated_at: string;
 }

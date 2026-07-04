@@ -70,7 +70,20 @@ export const Spese: React.FC = () => {
         return;
       }
 
-      setSpese(data || []);
+      const ordinaSpese = (a: Scadenza, b: Scadenza) => {
+        const ordine = (s: Scadenza) => {
+          if (s.data_pagamento) return 4;
+          if (!s.data_scadenza) return 0;
+          const oggi = new Date();
+          const scadenza = new Date(s.data_scadenza);
+          if (scadenza < oggi) return 1;
+          if (scadenza <= new Date(oggi.getTime() + 7 * 24 * 60 * 60 * 1000)) return 2;
+          return 3;
+        };
+        return ordine(a) - ordine(b);
+      };
+
+      setSpese((data || []).sort(ordinaSpese));
     } catch (error) {
       console.error('Errore:', error);
       toast.error('Errore nel caricamento dei dati');

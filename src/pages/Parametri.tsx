@@ -56,6 +56,8 @@ interface StatoApe {
   id: number;
   descrizione: string;
   colore: string;
+  ordinamento: number;
+  filtro_non_pagata: number;
   created_at: string;
   updated_at: string;
 }
@@ -64,6 +66,8 @@ interface StatoGenerale {
   id: number;
   descrizione: string;
   colore: string;
+  ordinamento: number;
+  filtro_non_pagata: number;
   created_at: string;
   updated_at: string;
 }
@@ -114,13 +118,13 @@ export const Parametri: React.FC = () => {
   const [statiApe, setStatiApe] = useState<StatoApe[]>([]);
   const [showModalStatiApe, setShowModalStatiApe] = useState(false);
   const [editingStatoApe, setEditingStatoApe] = useState<StatoApe | null>(null);
-  const [formStatiApe, setFormStatiApe] = useState({ descrizione: '', colore: '#10b981' });
+  const [formStatiApe, setFormStatiApe] = useState({ descrizione: '', colore: '#10b981', ordinamento: 0, filtro_non_pagata: 0 });
 
   // Stati per Stati Generali
   const [statiGenerali, setStatiGenerali] = useState<StatoGenerale[]>([]);
   const [showModalStatiGenerali, setShowModalStatiGenerali] = useState(false);
   const [editingStatoGenerale, setEditingStatoGenerale] = useState<StatoGenerale | null>(null);
-  const [formStatiGenerali, setFormStatiGenerali] = useState({ descrizione: '', colore: '#6366f1' });
+  const [formStatiGenerali, setFormStatiGenerali] = useState({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
 
   // Stati per Stati Scadenze
   const [statiScadenze, setStatiScadenze] = useState<StatoScadenza[]>([]);
@@ -523,7 +527,7 @@ export const Parametri: React.FC = () => {
       const { data, error } = await supabase
         .from('stati_ape')
         .select('*')
-        .order('id');
+        .order('ordinamento', { ascending: true });
 
       if (error) throw error;
       setStatiApe(data || []);
@@ -542,7 +546,9 @@ export const Parametri: React.FC = () => {
     try {
       const dataToSave = {
         descrizione: formStatiApe.descrizione.trim(),
-        colore: formStatiApe.colore
+        colore: formStatiApe.colore,
+        ordinamento: formStatiApe.ordinamento,
+        filtro_non_pagata: formStatiApe.filtro_non_pagata
       };
 
       if (editingStatoApe) {
@@ -564,7 +570,7 @@ export const Parametri: React.FC = () => {
 
       setShowModalStatiApe(false);
       setEditingStatoApe(null);
-      setFormStatiApe({ descrizione: '', colore: '#10b981' });
+      setFormStatiApe({ descrizione: '', colore: '#10b981', ordinamento: 0 });
       loadStatiApe();
     } catch (error) {
       console.error('Errore:', error);
@@ -597,7 +603,7 @@ export const Parametri: React.FC = () => {
       const { data, error } = await supabase
         .from('stati_generali')
         .select('*')
-        .order('id');
+        .order('ordinamento', { ascending: true });
 
       if (error) throw error;
       setStatiGenerali(data || []);
@@ -616,7 +622,9 @@ export const Parametri: React.FC = () => {
     try {
       const dataToSave = {
         descrizione: formStatiGenerali.descrizione.trim(),
-        colore: formStatiGenerali.colore
+        colore: formStatiGenerali.colore,
+        ordinamento: formStatiGenerali.ordinamento,
+        filtro_non_pagata: formStatiGenerali.filtro_non_pagata
       };
 
       if (editingStatoGenerale) {
@@ -638,7 +646,7 @@ export const Parametri: React.FC = () => {
 
       setShowModalStatiGenerali(false);
       setEditingStatoGenerale(null);
-      setFormStatiGenerali({ descrizione: '', colore: '#6366f1' });
+      setFormStatiGenerali({ descrizione: '', colore: '#6366f1', ordinamento: 0 });
       loadStatiGenerali();
     } catch (error) {
       console.error('Errore:', error);
@@ -1299,7 +1307,10 @@ export const Parametri: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setShowModalStatiApe(true)}
+            onClick={() => {
+              setFormStatiApe({ descrizione: '', colore: '#10b981', ordinamento: 0, filtro_non_pagata: 0 });
+              setShowModalStatiApe(true);
+            }}
             className="btn btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -1312,8 +1323,10 @@ export const Parametri: React.FC = () => {
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ordinamento</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Descrizione</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Colore</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Filtro Non Pagata</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data creazione</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ultima modifica</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Azioni</th>
@@ -1323,6 +1336,7 @@ export const Parametri: React.FC = () => {
               {statiApe.map((stato) => (
                 <tr key={stato.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{stato.id}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{stato.ordinamento}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{stato.descrizione}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -1332,6 +1346,9 @@ export const Parametri: React.FC = () => {
                       ></div>
                       <span className="text-sm text-gray-900 dark:text-gray-100">{stato.colore}</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {stato.filtro_non_pagata ? <Check className="w-4 h-4 text-green-600 dark:text-green-400 mx-auto" /> : <X className="w-4 h-4 text-gray-400 dark:text-gray-500 mx-auto" />}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {new Date(stato.created_at).toLocaleDateString('it-IT')}
@@ -1344,7 +1361,7 @@ export const Parametri: React.FC = () => {
                       <button
                         onClick={() => {
                           setEditingStatoApe(stato);
-                          setFormStatiApe({ descrizione: stato.descrizione, colore: stato.colore });
+                          setFormStatiApe({ descrizione: stato.descrizione, colore: stato.colore, ordinamento: stato.ordinamento, filtro_non_pagata: stato.filtro_non_pagata });
                           setShowModalStatiApe(true);
                         }}
                         className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
@@ -1377,7 +1394,10 @@ export const Parametri: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setShowModalStatiGenerali(true)}
+            onClick={() => {
+              setFormStatiGenerali({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
+              setShowModalStatiGenerali(true);
+            }}
             className="btn btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -1390,8 +1410,10 @@ export const Parametri: React.FC = () => {
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ordinamento</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Descrizione</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Colore</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Filtro Non Pagata</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data creazione</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ultima modifica</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Azioni</th>
@@ -1401,6 +1423,7 @@ export const Parametri: React.FC = () => {
               {statiGenerali.map((stato) => (
                 <tr key={stato.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{stato.id}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{stato.ordinamento}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{stato.descrizione}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -1410,6 +1433,9 @@ export const Parametri: React.FC = () => {
                       ></div>
                       <span className="text-sm text-gray-900 dark:text-gray-100">{stato.colore}</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {stato.filtro_non_pagata ? <Check className="w-4 h-4 text-green-600 dark:text-green-400 mx-auto" /> : <X className="w-4 h-4 text-gray-400 dark:text-gray-500 mx-auto" />}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {new Date(stato.created_at).toLocaleDateString('it-IT')}
@@ -1422,7 +1448,7 @@ export const Parametri: React.FC = () => {
                       <button
                         onClick={() => {
                           setEditingStatoGenerale(stato);
-                          setFormStatiGenerali({ descrizione: stato.descrizione, colore: stato.colore });
+                          setFormStatiGenerali({ descrizione: stato.descrizione, colore: stato.colore, ordinamento: stato.ordinamento, filtro_non_pagata: stato.filtro_non_pagata });
                           setShowModalStatiGenerali(true);
                         }}
                         className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
@@ -1792,7 +1818,7 @@ export const Parametri: React.FC = () => {
                 onClick={() => {
                   setShowModalStatiApe(false);
                   setEditingStatoApe(null);
-                  setFormStatiApe({ descrizione: '', colore: '#10b981' });
+                  setFormStatiApe({ descrizione: '', colore: '#10b981', ordinamento: 0, filtro_non_pagata: 0 });
                 }}
                 className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
@@ -1800,6 +1826,16 @@ export const Parametri: React.FC = () => {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ordinamento</label>
+                <input
+                  type="number"
+                  value={formStatiApe.ordinamento}
+                  onChange={(e) => setFormStatiApe(prev => ({ ...prev, ordinamento: parseInt(e.target.value) || 0 }))}
+                  className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="0"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrizione</label>
                 <input
@@ -1819,13 +1855,24 @@ export const Parametri: React.FC = () => {
                   className="w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
                 />
               </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formStatiApe.filtro_non_pagata === 1}
+                    onChange={(e) => setFormStatiApe(prev => ({ ...prev, filtro_non_pagata: e.target.checked ? 1 : 0 }))}
+                    className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded focus:ring-blue-500 dark:focus:ring-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filtro Non Pagata</span>
+                </label>
+              </div>
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => {
                   setShowModalStatiApe(false);
                   setEditingStatoApe(null);
-                  setFormStatiApe({ descrizione: '', colore: '#10b981' });
+                  setFormStatiApe({ descrizione: '', colore: '#10b981', ordinamento: 0, filtro_non_pagata: 0 });
                 }}
                 className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
               >
@@ -1854,7 +1901,7 @@ export const Parametri: React.FC = () => {
                 onClick={() => {
                   setShowModalStatiGenerali(false);
                   setEditingStatoGenerale(null);
-                  setFormStatiGenerali({ descrizione: '', colore: '#6366f1' });
+                  setFormStatiGenerali({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
                 }}
                 className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
@@ -1862,6 +1909,16 @@ export const Parametri: React.FC = () => {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ordinamento</label>
+                <input
+                  type="number"
+                  value={formStatiGenerali.ordinamento}
+                  onChange={(e) => setFormStatiGenerali(prev => ({ ...prev, ordinamento: parseInt(e.target.value) || 0 }))}
+                  className="input w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  placeholder="0"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrizione</label>
                 <input
@@ -1881,13 +1938,24 @@ export const Parametri: React.FC = () => {
                   className="w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
                 />
               </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formStatiGenerali.filtro_non_pagata === 1}
+                    onChange={(e) => setFormStatiGenerali(prev => ({ ...prev, filtro_non_pagata: e.target.checked ? 1 : 0 }))}
+                    className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded focus:ring-blue-500 dark:focus:ring-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filtro Non Pagata</span>
+                </label>
+              </div>
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => {
                   setShowModalStatiGenerali(false);
                   setEditingStatoGenerale(null);
-                  setFormStatiGenerali({ descrizione: '', colore: '#6366f1' });
+                  setFormStatiGenerali({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
                 }}
                 className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
               >

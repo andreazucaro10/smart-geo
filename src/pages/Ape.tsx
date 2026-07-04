@@ -1,12 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Search, ChevronDown, Edit, Trash2, Check, X, Save, Copy, ArrowRightCircle, User } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import { RubricaAutocomplete } from '../components/RubricaAutocomplete';
 import { syncRubricaFromPratica } from '../utils/rubricaSync';
+import { ContextMenu } from '../components/ContextMenu';
 import type { Ape, StatoApe, Rubrica } from '../types';
 import toast from 'react-hot-toast';
+
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+};
+
+const TriStateFilter = ({ value, onChange }: {
+  value: 'all' | 'yes' | 'no';
+  onChange: (v: 'all' | 'yes' | 'no') => void;
+}) => (
+  <div className="flex items-center justify-center gap-0.5">
+    <button
+      onClick={() => onChange('all')}
+      title="Tutti"
+      className={`p-1 rounded transition-all ${
+        value === 'all'
+          ? 'bg-gray-200 dark:bg-gray-600 shadow-sm'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-700 opacity-50 hover:opacity-100'
+      }`}
+    >
+      <div className="w-2.5 h-0.5 bg-gray-400 dark:bg-gray-500 rounded" />
+    </button>
+    <button
+      onClick={() => onChange('yes')}
+      title="Si"
+      className={`p-1 rounded transition-all ${
+        value === 'yes'
+          ? 'bg-gray-200 dark:bg-gray-600 shadow-sm'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-700 opacity-50 hover:opacity-100'
+      }`}
+    >
+      <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
+    </button>
+    <button
+      onClick={() => onChange('no')}
+      title="No"
+      className={`p-1 rounded transition-all ${
+        value === 'no'
+          ? 'bg-gray-200 dark:bg-gray-600 shadow-sm'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-700 opacity-50 hover:opacity-100'
+      }`}
+    >
+      <X className="w-3 h-3 text-red-600 dark:text-red-400" />
+    </button>
+  </div>
+);
 
 interface ApeFormData {
   committente: string;
@@ -34,13 +85,26 @@ export const ApePage: React.FC = () => {
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [manualRefreshNeeded, setManualRefreshNeeded] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filtroStato, setFiltroStato] = useState('');
+  const [columnFilters, setColumnFilters] = useState<{
+    stato: string;
+    committente: string;
+    proprieta: string;
+    indirizzo: string;
+    citta: string;
+    note: string;
+    progressivo: string;
+  }>({
+    stato: '',
+    committente: '',
+    proprieta: '',
+    indirizzo: '',
+    citta: '',
+    note: '',
+    progressivo: ''
+  });
   const [filtriAttivi, setFiltriAttivi] = useState({
     soloNonPagate: false
   });
-  const [filtroAnno, setFiltroAnno] = useState('');
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(() => {
     const saved = localStorage.getItem('ape-records-per-page');
@@ -77,6 +141,15 @@ export const ApePage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const { user, loading: authLoading } = useAuthStore();
 
+  const debouncedCommittente = useDebounce(columnFilters.committente, 300);
+  const debouncedProprieta = useDebounce(columnFilters.proprieta, 300);
+  const debouncedNote = useDebounce(columnFilters.note, 300);
+  const debouncedIndirizzo = useDebounce(columnFilters.indirizzo, 300);
+  const debouncedCitta = useDebounce(columnFilters.citta, 300);
+  const debouncedProgressivo = useDebounce(columnFilters.progressivo, 300);
+
+  const activeFilterCount = Object.values(columnFilters).filter(val => val !== '').length;
+
   // Funzione per gestire la selezione di una singola riga
   const handleRowSelection = (id: number) => {
     setSelectedRows(prev => {
@@ -101,26 +174,24 @@ export const ApePage: React.FC = () => {
     }
   };
 
-  // Gestione parametri URL per filtri automatici
+  // Debounce effect: trigger fetch when debounced text values change
   useEffect(() => {
-    const filter = searchParams.get('filter');
-    let newFiltriAttivi = { ...filtriAttivi };
-    
-    if (filter === 'non_pagate') {
-      newFiltriAttivi = { ...newFiltriAttivi, soloNonPagate: true };
-    }
-    
-    // Solo se c'è un filtro da applicare e l'user è presente
-    if (filter && user?.id && !authLoading) {
-      setFiltriAttivi(newFiltriAttivi);
-      setCurrentPage(1);
-      // Esegui la ricerca con il nuovo filtro
-      fetchData({
-        filtriAttivi: newFiltriAttivi,
-        page: 1
+    if (user?.id) {
+      setColumnFilters(prev => {
+        const newFilters = {
+          ...prev,
+          committente: debouncedCommittente,
+          proprieta: debouncedProprieta,
+          note: debouncedNote,
+          indirizzo: debouncedIndirizzo,
+          citta: debouncedCitta,
+          progressivo: debouncedProgressivo
+        };
+        setTimeout(() => fetchData({ columnFilters: newFilters }), 0);
+        return newFilters;
       });
     }
-  }, [searchParams, user?.id, authLoading]);
+  }, [debouncedCommittente, debouncedProprieta, debouncedNote, debouncedIndirizzo, debouncedCitta, debouncedProgressivo, user?.id]);
 
   // Protezione contro errori delle estensioni del browser
   useEffect(() => {
@@ -491,9 +562,7 @@ export const ApePage: React.FC = () => {
   };
 
   const fetchData = async (customFilters?: {
-    searchTerm?: string;
-    filtroStato?: string;
-    filtroAnno?: string;
+    columnFilters?: typeof columnFilters;
     filtriAttivi?: typeof filtriAttivi;
     page?: number;
     perPage?: number;
@@ -501,51 +570,71 @@ export const ApePage: React.FC = () => {
     try {
       setLoading(true);
       
-      // Verifica che l'utente sia autenticato
       if (!user?.id) {
         console.warn('Utente non autenticato, impossibile caricare i dati');
         setLoading(false);
         return;
       }
       
-      const currentSearchTerm = customFilters?.searchTerm ?? searchTerm;
-      const currentFiltroStato = customFilters?.filtroStato ?? filtroStato;
-      const currentFiltroAnno = customFilters?.filtroAnno ?? filtroAnno;
+      const currentFilters = customFilters?.columnFilters ?? columnFilters;
       const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
       const currentPageParam = customFilters?.page ?? currentPage;
       const currentPerPage = customFilters?.perPage ?? recordsPerPage;
       
-      // Query per contare il totale
+      const searchParts: string[] = [];
+      if (currentFilters.committente.trim()) {
+        searchParts.push(`committente.ilike.%${currentFilters.committente}%`);
+      }
+      if (currentFilters.proprieta.trim()) {
+        searchParts.push(`proprieta.ilike.%${currentFilters.proprieta}%,proprieta2.ilike.%${currentFilters.proprieta}%`);
+      }
+      if (currentFilters.indirizzo.trim()) {
+        searchParts.push(`indirizzo.ilike.%${currentFilters.indirizzo}%`);
+      }
+      if (currentFilters.citta.trim()) {
+        searchParts.push(`citta.ilike.%${currentFilters.citta}%`);
+      }
+      if (currentFilters.note.trim()) {
+        searchParts.push(`note.ilike.%${currentFilters.note}%`);
+      }
+      if (currentFilters.progressivo.trim()) {
+        searchParts.push(`progressivo.ilike.%${currentFilters.progressivo}%`);
+      }
+
       let countQuery = supabase
         .from('ape')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user?.id);
 
-      // Applica filtri al conteggio
-      if (currentSearchTerm) {
-        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%,citta.ilike.%${currentSearchTerm}%,mail.ilike.%${currentSearchTerm}%,note.ilike.%${currentSearchTerm}%,telefono.ilike.%${currentSearchTerm}%,telefono2.ilike.%${currentSearchTerm}%`);
+      if (searchParts.length > 0) {
+        countQuery = countQuery.or(searchParts.join(','));
       }
 
-      if (currentFiltroStato) {
-        countQuery = countQuery.eq('registrazione', parseInt(currentFiltroStato));
+      if (currentFilters.stato) {
+        countQuery = countQuery.eq('registrazione', parseInt(currentFilters.stato));
       }
 
-      if (currentFiltroAnno) {
-        // Filter by year using the created_at field
-        const startDate = `${currentFiltroAnno}-01-01`;
-        const endDate = `${currentFiltroAnno}-12-31`;
-        countQuery = countQuery.gte('created_at', startDate).lte('created_at', endDate);
+      let statiFiltroNonPagata: number[] = [];
+      if (currentFiltriAttivi.soloNonPagate) {
+        const { data: statiNonPagata } = await supabase
+          .from('stati_ape')
+          .select('id')
+          .eq('filtro_non_pagata', 1);
+        statiFiltroNonPagata = (statiNonPagata || []).map((s: { id: number }) => s.id);
       }
 
       if (currentFiltriAttivi.soloNonPagate) {
-        countQuery = countQuery.eq('pagamento', false).neq('registrazione', 1);
+        if (statiFiltroNonPagata.length > 0) {
+          countQuery = countQuery.eq('pagamento', false).in('registrazione', statiFiltroNonPagata);
+        } else {
+          countQuery = countQuery.eq('pagamento', false);
+        }
       }
 
       const { count, error: countError } = await countQuery;
       
       if (countError) {
         console.error('Errore nel conteggio:', countError);
-        // Se l'errore è relativo alla sessione, mostra un messaggio specifico
         if (countError.message?.includes('JWT') || countError.message?.includes('session')) {
           toast.error('Sessione scaduta. Effettua nuovamente il login.');
         }
@@ -553,38 +642,33 @@ export const ApePage: React.FC = () => {
         setTotalRecords(count || 0);
       }
       
-      // Query principale con paginazione
       let query = supabase
         .from('ape')
         .select(`
           *,
-          registrazione_info:stati_ape(id, descrizione, colore)
+          registrazione_info:stati_ape(id, descrizione, colore, ordinamento)
         `)
         .eq('user_id', user?.id)
-        .order('progressivo', { ascending: false, nullsFirst: true })
-        .order('registrazione', { ascending: true });
+        .order('registrazione', { ascending: true })
+        .order('created_at', { ascending: false })
+        .order('progressivo', { ascending: false, nullsFirst: true });
 
-      // Applica filtri
-      if (currentSearchTerm) {
-        query = query.or(`committente.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,progressivo.ilike.%${currentSearchTerm}%,citta.ilike.%${currentSearchTerm}%,mail.ilike.%${currentSearchTerm}%,note.ilike.%${currentSearchTerm}%,telefono.ilike.%${currentSearchTerm}%,telefono2.ilike.%${currentSearchTerm}%`);
+      if (searchParts.length > 0) {
+        query = query.or(searchParts.join(','));
       }
 
-      if (currentFiltroStato) {
-        query = query.eq('registrazione', parseInt(currentFiltroStato));
-      }
-
-      if (currentFiltroAnno) {
-        // Filter by year using the created_at field
-        const startDate = `${currentFiltroAnno}-01-01`;
-        const endDate = `${currentFiltroAnno}-12-31`;
-        query = query.gte('created_at', startDate).lte('created_at', endDate);
+      if (currentFilters.stato) {
+        query = query.eq('registrazione', parseInt(currentFilters.stato));
       }
 
       if (currentFiltriAttivi.soloNonPagate) {
-        query = query.eq('pagamento', false).neq('registrazione', 1);
+        if (statiFiltroNonPagata.length > 0) {
+          query = query.eq('pagamento', false).in('registrazione', statiFiltroNonPagata);
+        } else {
+          query = query.eq('pagamento', false);
+        }
       }
 
-      // Applica paginazione
       const from = (currentPageParam - 1) * currentPerPage;
       const to = from + currentPerPage - 1;
       query = query.range(from, to);
@@ -593,7 +677,6 @@ export const ApePage: React.FC = () => {
 
       if (praticheError) {
         console.error('Errore nel caricamento pratiche APE:', praticheError);
-        // Se l'errore è relativo alla sessione, mostra un messaggio specifico
         if (praticheError.message?.includes('JWT') || praticheError.message?.includes('session')) {
           toast.error('Sessione scaduta. Effettua nuovamente il login.');
         } else {
@@ -602,11 +685,10 @@ export const ApePage: React.FC = () => {
         return;
       }
 
-      // Carica stati APE per il dropdown
       const { data: statiData, error: statiError } = await supabase
         .from('stati_ape')
         .select('*')
-        .order('id');
+        .order('ordinamento', { ascending: true });
 
       if (statiError) {
         console.error('Errore caricamento stati APE:', statiError);
@@ -614,7 +696,20 @@ export const ApePage: React.FC = () => {
         setStati(statiData || []);
       }
 
-      setPratiche(praticheData || []);
+      const sortedData = [...(praticheData || [])].sort((a, b) => {
+        const ordinamentoA = a.registrazione_info?.ordinamento ?? Infinity;
+        const ordinamentoB = b.registrazione_info?.ordinamento ?? Infinity;
+        if (ordinamentoA !== ordinamentoB) return ordinamentoA - ordinamentoB;
+
+        const createdCompare = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (createdCompare !== 0) return createdCompare;
+
+        const progressivoA = a.progressivo || '';
+        const progressivoB = b.progressivo || '';
+        return progressivoB.localeCompare(progressivoA, undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+      setPratiche(sortedData);
     } catch (error) {
       console.error('Errore:', error);
       toast.error('Errore nel caricamento dei dati');
@@ -623,43 +718,17 @@ export const ApePage: React.FC = () => {
     }
   };
 
-  const fetchAvailableYears = async () => {
-    if (!user?.id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('ape')
-        .select('created_at')
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Errore caricamento anni:', error);
-        return;
-      }
-
-      const years = [...new Set(data.map(item => new Date(item.created_at).getFullYear()))].sort((a, b) => b - a);
-      setAvailableYears(years);
-    } catch (error) {
-      console.error('Errore:', error);
-    }
-  };
-
   useEffect(() => {
-    // Aspetta che l'autenticazione sia inizializzata
     const initializeData = async () => {
-      // Attende che l'autenticazione sia completata
       if (authLoading) {
         console.log('Autenticazione in corso...');
         return;
       }
 
-      // Se c'è un user, carica i dati
       if (user?.id) {
         console.log('User autenticato, caricamento dati...');
-        await fetchAvailableYears();
         await fetchData();
       }
-      // Se l'user è null ma lo store ha finito di caricare, significa che non è autenticato
       else if (user === null) {
         console.warn('User non autenticato');
         setLoading(false);
@@ -702,7 +771,7 @@ export const ApePage: React.FC = () => {
               .from('ape')
               .select(`
                 *,
-                registrazione_info:stati_ape(id, descrizione, colore)
+                registrazione_info:stati_ape(id, descrizione, colore, ordinamento)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -727,7 +796,7 @@ export const ApePage: React.FC = () => {
               .from('ape')
               .select(`
                 *,
-                registrazione_info:stati_ape(id, descrizione, colore)
+                registrazione_info:stati_ape(id, descrizione, colore, ordinamento)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -778,8 +847,25 @@ export const ApePage: React.FC = () => {
     };
   }, [user?.id, stati]);
 
-  const handleSearch = () => {
-    fetchData();
+  const handleColumnFilterChange = useCallback((key: keyof typeof columnFilters, value: string) => {
+    setColumnFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  }, []);
+
+  const handleApplyFilter = (overrides: Partial<typeof columnFilters>) => {
+    const newFilters = { ...columnFilters, ...overrides };
+    setColumnFilters(newFilters);
+    setCurrentPage(1);
+    fetchData({ columnFilters: newFilters, page: 1 });
+  };
+
+  const handleResetFilters = () => {
+    const defaultFilters: typeof columnFilters = {
+      stato: '', committente: '', proprieta: '', indirizzo: '', citta: '', note: '', progressivo: ''
+    };
+    setColumnFilters(defaultFilters);
+    setCurrentPage(1);
+    fetchData({ columnFilters: defaultFilters, page: 1 });
   };
 
   const handleFilterToggle = (filterName: keyof typeof filtriAttivi) => {
@@ -789,9 +875,8 @@ export const ApePage: React.FC = () => {
     };
     
     setFiltriAttivi(newFiltriAttivi);
-    setCurrentPage(1); // Reset alla prima pagina quando cambiano i filtri
+    setCurrentPage(1);
     
-    // Trigger automatico della ricerca con i nuovi filtri
     fetchData({
       filtriAttivi: newFiltriAttivi,
       page: 1
@@ -806,7 +891,7 @@ export const ApePage: React.FC = () => {
   const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
     setRecordsPerPage(newRecordsPerPage);
     localStorage.setItem('ape-records-per-page', newRecordsPerPage.toString());
-    setCurrentPage(1); // Reset alla prima pagina quando cambia il numero di record
+    setCurrentPage(1);
     fetchData({
       perPage: newRecordsPerPage,
       page: 1
@@ -1003,126 +1088,64 @@ export const ApePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6" style={{marginTop: '0px'}}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gestione APE</h1>
-          <p className="text-gray-600 dark:text-gray-300">Gestione pratiche APE</p>
-          {realtimeConnected && (
-            <div className="flex items-center gap-2 mt-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs text-green-600 dark:text-green-400">
-                Aggiornamenti in tempo reale attivi
-                {lastUpdateTime && (
-                  <span className="ml-1 text-gray-500 dark:text-gray-400">
-                    (ultimo: {lastUpdateTime.toLocaleTimeString('it-IT')})
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {manualRefreshNeeded && (
+    <div className="h-full flex flex-col px-4">
+      <div className="space-y-3 flex-1 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gestione APE</h1>
+            <p className="text-gray-600 dark:text-gray-300">Gestione pratiche APE</p>
+            {realtimeConnected && (
+              <div className="flex items-center gap-2 mt-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-green-600 dark:text-green-400">
+                  Aggiornamenti in tempo reale attivi
+                  {lastUpdateTime && (
+                    <span className="ml-1 text-gray-500 dark:text-gray-400">
+                      (ultimo: {lastUpdateTime.toLocaleTimeString('it-IT')})
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {activeFilterCount > 0 && (
+              <button
+                onClick={handleResetFilters}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Reset filtri
+                <span className="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  {activeFilterCount}
+                </span>
+              </button>
+            )}
+            {manualRefreshNeeded && (
+              <button
+                onClick={() => {
+                  fetchData();
+                  setManualRefreshNeeded(false);
+                }}
+                className="btn btn-outline flex items-center gap-2 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                title="Aggiorna dati"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Aggiorna
+              </button>
+            )}
             <button
-              onClick={() => {
-                fetchData();
-                setManualRefreshNeeded(false);
-              }}
-              className="btn btn-outline flex items-center gap-2 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-              title="Aggiorna dati"
+              onClick={openCreateModal}
+              className="btn btn-primary flex items-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Aggiorna
+              <Plus className="w-4 h-4" />
+              Nuova Pratica APE
             </button>
-          )}
-          <button
-            onClick={openCreateModal}
-            className="btn btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Nuova Pratica APE
-          </button>
+          </div>
         </div>
-      </div>
-
-      {/* Filtri */}
-      <div className="card space-y-4 dark:bg-gray-800 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-           {/* Campo di ricerca */}
-           <div className="relative">
-             <input
-               type="text"
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-               placeholder="Cerca committente, indirizzo..."
-               className="input pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-             />
-             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-             <button
-               onClick={handleSearch}
-               className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white p-1 rounded"
-             >
-               <Search className="w-4 h-4" />
-             </button>
-           </div>
-
-           {/* Filtro Stati APE */}
-           <div className="relative">
-             <select
-               value={filtroStato}
-               onChange={(e) => {
-                 const newFiltroStato = e.target.value;
-                 setFiltroStato(newFiltroStato);
-                 setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
-                 // Trigger automatico della ricerca con il nuovo stato
-                 fetchData({
-                   filtroStato: newFiltroStato,
-                   page: 1
-                 });
-               }}
-               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-             >
-               <option value="">-- Tutti gli stati APE --</option>
-               {stati.map((stato) => (
-                 <option key={stato.id} value={stato.id}>
-                   {stato.descrizione}
-                 </option>
-               ))}
-             </select>
-             <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-           </div>
-
-           {/* Filtro Anno */}
-           <div className="relative">
-             <select
-               value={filtroAnno}
-               onChange={(e) => {
-                 const newFiltroAnno = e.target.value;
-                 setFiltroAnno(newFiltroAnno);
-                 setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
-                 // Trigger automatico della ricerca con il nuovo anno
-                 fetchData({
-                   filtroAnno: newFiltroAnno,
-                   page: 1
-                 });
-               }}
-               className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-             >
-               <option value="">-- Tutti gli anni --</option>
-               {availableYears.map((year) => (
-                 <option key={year} value={year.toString()}>
-                   {year}
-                 </option>
-               ))}
-             </select>
-             <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-           </div>
-         </div>
 
         {/* Filtri toggle */}
         <div className="flex flex-wrap gap-4">
@@ -1151,7 +1174,6 @@ export const ApePage: React.FC = () => {
             <span className="text-sm font-medium">Non pagate</span>
           </label>
         </div>
-      </div>
 
       {/* Sezione azioni multiple (appare solo quando ci sono righe selezionate) */}
       {selectedRows.size > 0 && (
@@ -1182,23 +1204,23 @@ export const ApePage: React.FC = () => {
 
       {/* Contenuto principale */}
       {loading ? (
-        <div className="card dark:bg-gray-800 dark:border-gray-700">
+        <div className="card p-0 dark:bg-gray-800 dark:border-gray-700 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             <span className="ml-2 text-gray-500 dark:text-gray-400">Caricamento...</span>
           </div>
         </div>
       ) : pratiche.length === 0 ? (
-        <div className="card dark:bg-gray-800 dark:border-gray-700">
+        <div className="card p-0 dark:bg-gray-800 dark:border-gray-700 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <p className="text-yellow-800 dark:text-yellow-300 text-center">Nessuna pratica APE trovata.</p>
           </div>
         </div>
       ) : (
         /* Tabella */
-        <div className="card p-0 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+        <div className="card p-0 dark:bg-gray-800 dark:border-gray-700 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
+          <div className="overflow-x-auto h-full overflow-y-auto">
+            <table className="w-full" style={{ minHeight: '400px' }}>
               <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                 <tr>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -1233,6 +1255,12 @@ export const ApePage: React.FC = () => {
                     Proprietà
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Indirizzo
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Città
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Note
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -1241,6 +1269,82 @@ export const ApePage: React.FC = () => {
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Pagamento
                   </th>
+                </tr>
+                {/* Riga filtri inline */}
+                <tr className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
+                  <td className="px-2 py-1.5"></td>
+                  <td className="px-2 py-1.5">
+                    <div className="relative">
+                      <select
+                        value={columnFilters.stato}
+                        onChange={(e) => handleApplyFilter({ stato: e.target.value })}
+                        className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="" className="bg-white dark:bg-gray-700 dark:text-gray-200">Tutti</option>
+                        {stati.map((stato) => (
+                          <option key={stato.id} value={stato.id} className="bg-white dark:bg-gray-700 dark:text-gray-200">
+                            {stato.descrizione}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.committente}
+                      onChange={(e) => handleColumnFilterChange('committente', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.proprieta}
+                      onChange={(e) => handleColumnFilterChange('proprieta', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.indirizzo}
+                      onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.citta}
+                      onChange={(e) => handleColumnFilterChange('citta', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.note}
+                      onChange={(e) => handleColumnFilterChange('note', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.progressivo}
+                      onChange={(e) => handleColumnFilterChange('progressivo', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5"></td>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -1278,10 +1382,16 @@ export const ApePage: React.FC = () => {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {pratica.committente}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                      {combineProprieta(pratica.proprieta, pratica.proprieta2)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
+                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                       {combineProprieta(pratica.proprieta, pratica.proprieta2)}
+                     </td>
+                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                       {pratica.indirizzo || '-'}
+                     </td>
+                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                       {pratica.citta || '-'}
+                     </td>
+                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
                       {pratica.note || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
@@ -1409,6 +1519,8 @@ export const ApePage: React.FC = () => {
           )}
         </div>
       )}
+
+      </div>
 
       {/* Modal Gestione Pratica APE */}
       {showModal && (
@@ -1684,11 +1796,7 @@ export const ApePage: React.FC = () => {
 
       {/* Menu Contestuale */}
       {contextMenu.pratica && (
-        <div
-          className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[200px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={contextMenu.x} y={contextMenu.y}>
           <button
             onClick={() => handleContextMenuAction('edit', contextMenu.pratica!)}
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -1726,7 +1834,7 @@ export const ApePage: React.FC = () => {
             <Trash2 className="w-4 h-4" />
             Elimina
           </button>
-        </div>
+        </ContextMenu>
       )}
 
       {/* Modal Cambia Stato da Menu Contestuale */}

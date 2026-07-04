@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Filter, RotateCcw, Edit, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
+import { ContextMenu } from '../components/ContextMenu';
 import type { Fattura } from '../types';
 import toast from 'react-hot-toast';
 
@@ -1156,11 +1157,7 @@ export const Contabilita: React.FC = () => {
 
       {/* Menu Contestuale */}
       {contextMenu.fattura && (
-        <div
-          className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[180px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={contextMenu.x} y={contextMenu.y}>
           <button
             onClick={() => handleContextMenuAction('edit', contextMenu.fattura!)}
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -1176,7 +1173,7 @@ export const Contabilita: React.FC = () => {
             <Trash2 className="w-4 h-4" />
             Elimina
           </button>
-        </div>
+        </ContextMenu>
       )}
     </div>
   );

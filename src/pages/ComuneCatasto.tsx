@@ -1,12 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Search, ChevronDown, Edit, Trash2, Check, X, Copy, ArrowRightCircle, User } from 'lucide-react';
+import { Plus, ChevronDown, Edit, Trash2, Check, X, Copy, ArrowRightCircle, User } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import { RubricaAutocomplete } from '../components/RubricaAutocomplete';
 import { syncRubricaFromPratica } from '../utils/rubricaSync';
+import { ContextMenu } from '../components/ContextMenu';
 import type { ComuneCatasto, StatoGenerale, TipoIncarico, TipoPratica, Rubrica } from '../types';
 import toast from 'react-hot-toast';
+
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+};
+
+const TriStateFilter = ({ value, onChange }: {
+  value: 'all' | 'yes' | 'no';
+  onChange: (v: 'all' | 'yes' | 'no') => void;
+}) => (
+  <div className="flex items-center justify-center gap-0.5">
+    <button
+      onClick={() => onChange('all')}
+      title="Tutti"
+      className={`p-1 rounded transition-all ${
+        value === 'all'
+          ? 'bg-gray-200 dark:bg-gray-600 shadow-sm'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-700 opacity-50 hover:opacity-100'
+      }`}
+    >
+      <div className="w-2.5 h-0.5 bg-gray-400 dark:bg-gray-500 rounded" />
+    </button>
+    <button
+      onClick={() => onChange('yes')}
+      title="Si"
+      className={`p-1 rounded transition-all ${
+        value === 'yes'
+          ? 'bg-gray-200 dark:bg-gray-600 shadow-sm'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-700 opacity-50 hover:opacity-100'
+      }`}
+    >
+      <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
+    </button>
+    <button
+      onClick={() => onChange('no')}
+      title="No"
+      className={`p-1 rounded transition-all ${
+        value === 'no'
+          ? 'bg-gray-200 dark:bg-gray-600 shadow-sm'
+          : 'hover:bg-gray-100 dark:hover:bg-gray-700 opacity-50 hover:opacity-100'
+      }`}
+    >
+      <X className="w-3 h-3 text-red-600 dark:text-red-400" />
+    </button>
+  </div>
+);
 
 export const ComuneCatastoPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -17,16 +68,32 @@ export const ComuneCatastoPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filtroStato, setFiltroStato] = useState('');
-  const [filtroTipoIncarico, setFiltroTipoIncarico] = useState('');
-  const [filtroTipoPratica, setFiltroTipoPratica] = useState('');
-  const [filtriAttivi, setFiltriAttivi] = useState({
-    comune: false,
-    catasto: false,
+  const [columnFilters, setColumnFilters] = useState<{
+    stato: string;
+    committente: string;
+    proprieta: string;
+    note: string;
+    tipo_incarico: string;
+    tipo_pratica: string;
+    comune: 'all' | 'yes' | 'no';
+    catasto: 'all' | 'yes' | 'no';
+    fine_lavori: 'all' | 'yes' | 'no';
+    pagamento: 'all' | 'yes' | 'no';
+  }>({
+    stato: '',
+    committente: '',
+    proprieta: '',
+    note: '',
+    tipo_incarico: '',
+    tipo_pratica: '',
+    comune: 'all',
+    catasto: 'all',
+    fine_lavori: 'all',
+    pagamento: 'all'
+  });
+  const [presetFilters, setPresetFilters] = useState({
     nonCompletati: false,
-    nonPagati: false,
-    completateNonPagate: false
+    nonPagati: false
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(() => {
@@ -67,40 +134,40 @@ export const ComuneCatastoPage: React.FC = () => {
   });
   const { user } = useAuthStore();
 
+  const debouncedCommittente = useDebounce(columnFilters.committente, 300);
+  const debouncedProprieta = useDebounce(columnFilters.proprieta, 300);
+  const debouncedNote = useDebounce(columnFilters.note, 300);
+
+  const activeFilterCount = Object.entries(columnFilters).filter(([key, val]) => {
+    if (key === 'comune' || key === 'catasto' || key === 'fine_lavori' || key === 'pagamento') {
+      return val !== 'all';
+    }
+    return val !== '';
+  }).length + Object.values(presetFilters).filter(Boolean).length;
+
   // Gestione parametri URL per filtri automatici
   useEffect(() => {
     const filter = searchParams.get('filter');
-    let newFiltriAttivi = { ...filtriAttivi };
+    if (!filter || !user?.id) return;
 
+    const newPresetFilters = { ...presetFilters };
     if (filter === 'non_completati') {
-      newFiltriAttivi = { ...newFiltriAttivi, nonCompletati: true };
-    } else if (filter === 'completate_non_pagate') {
-      newFiltriAttivi = { ...newFiltriAttivi, completateNonPagate: true };
+      newPresetFilters.nonCompletati = true;
     } else if (filter === 'non_pagate') {
-      newFiltriAttivi = { ...newFiltriAttivi, nonPagati: true };
+      newPresetFilters.nonPagati = true;
     }
 
-    // Solo se c'è un filtro da applicare e l'user è presente
-    if (filter && user?.id) {
-      setFiltriAttivi(newFiltriAttivi);
-      setCurrentPage(1);
-      // Esegui la ricerca con il nuovo filtro
-      fetchData({
-        filtriAttivi: newFiltriAttivi,
-        page: 1
-      });
-    }
+    setPresetFilters(newPresetFilters);
+    setCurrentPage(1);
+    fetchData({ presetFilters: newPresetFilters, page: 1 });
   }, [searchParams, user?.id]);
 
   // Gestione shortcut CTRL+INVIO per salvare
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Verifica se il modale è aperto e se è stata premuta la combinazione CTRL+INVIO o CMD+INVIO
       if (showModal && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
         event.stopPropagation();
-
-        // Simula il submit del form se non è già in corso un submit
         if (!submitting) {
           const form = document.querySelector('form') as HTMLFormElement;
           if (form) {
@@ -109,13 +176,9 @@ export const ComuneCatastoPage: React.FC = () => {
         }
       }
     };
-
-    // Aggiunge l'event listener solo quando il modale è aperto
     if (showModal) {
       document.addEventListener('keydown', handleKeyDown);
     }
-
-    // Cleanup
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -124,7 +187,6 @@ export const ComuneCatastoPage: React.FC = () => {
   // Protezione contro errori delle estensioni del browser
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      // Ignora errori provenienti da estensioni del browser
       if (event.filename && (
         event.filename.includes('chrome-extension://') ||
         event.filename.includes('moz-extension://') ||
@@ -139,7 +201,6 @@ export const ComuneCatastoPage: React.FC = () => {
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Ignora promise rejection da estensioni
       if (event.reason && typeof event.reason === 'string' && (
         event.reason.includes('chrome-extension://') ||
         event.reason.includes('UltraWide') ||
@@ -176,79 +237,43 @@ export const ComuneCatastoPage: React.FC = () => {
     };
   }, [contextMenu.pratica]);
 
+  // Debounce effect: trigger fetch when debounced text values change
+  useEffect(() => {
+    if (user?.id) {
+      setColumnFilters(prev => {
+        const newFilters = {
+          ...prev,
+          committente: debouncedCommittente,
+          proprieta: debouncedProprieta,
+          note: debouncedNote
+        };
+        setTimeout(() => fetchData({ columnFilters: newFilters }), 0);
+        return newFilters;
+      });
+    }
+  }, [debouncedCommittente, debouncedProprieta, debouncedNote, user?.id]);
+
   const fetchData = async (customFilters?: {
-    searchTerm?: string;
-    filtroStato?: string;
-    filtroTipoIncarico?: string;
-    filtroTipoPratica?: string;
-    filtriAttivi?: typeof filtriAttivi;
+    columnFilters?: typeof columnFilters;
+    presetFilters?: typeof presetFilters;
     page?: number;
     perPage?: number;
   }) => {
     try {
       setLoading(true);
 
-      // Usa i filtri personalizzati o quelli dello stato corrente
-      const currentSearchTerm = customFilters?.searchTerm ?? searchTerm;
-      const currentFiltroStato = customFilters?.filtroStato ?? filtroStato;
-      const currentFiltroTipoIncarico = customFilters?.filtroTipoIncarico ?? filtroTipoIncarico;
-      const currentFiltroTipoPratica = customFilters?.filtroTipoPratica ?? filtroTipoPratica;
-      const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
+      const currentFilters = customFilters?.columnFilters ?? columnFilters;
+      const currentPresetFilters = customFilters?.presetFilters ?? presetFilters;
       const currentPageParam = customFilters?.page ?? currentPage;
       const currentPerPage = customFilters?.perPage ?? recordsPerPage;
 
-      // Prima query per contare il totale dei record
+      // Query conteggio
       let countQuery = supabase
         .from('comune_catasto')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user?.id);
 
-      // Applica filtri al conteggio
-      if (currentSearchTerm) {
-        countQuery = countQuery.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%,citta.ilike.%${currentSearchTerm}%,mail.ilike.%${currentSearchTerm}%,note.ilike.%${currentSearchTerm}%,telefono.ilike.%${currentSearchTerm}%,telefono2.ilike.%${currentSearchTerm}%`);
-      }
-
-      if (currentFiltroStato) {
-        countQuery = countQuery.eq('stato', parseInt(currentFiltroStato));
-      }
-
-      if (currentFiltroTipoIncarico) {
-        countQuery = countQuery.eq('tipo_incarico', parseInt(currentFiltroTipoIncarico));
-      }
-
-      if (currentFiltroTipoPratica) {
-        countQuery = countQuery.eq('tipo_pratica', parseInt(currentFiltroTipoPratica));
-      }
-
-      if (currentFiltriAttivi.comune) {
-        countQuery = countQuery.eq('comune', true);
-      }
-
-      if (currentFiltriAttivi.catasto) {
-        countQuery = countQuery.eq('catasto', true);
-      }
-
-      if (currentFiltriAttivi.nonCompletati) {
-        countQuery = countQuery.neq('stato', 3);
-      }
-
-      if (currentFiltriAttivi.nonPagati) {
-        countQuery = countQuery.eq('pagamento', false).neq('stato', 1);
-      }
-
-      if (currentFiltriAttivi.completateNonPagate) {
-        countQuery = countQuery.eq('fine_lavori', true).eq('pagamento', false).neq('stato', 1);
-      }
-
-      const { count, error: countError } = await countQuery;
-
-      if (countError) {
-        console.error('Errore nel conteggio:', countError);
-      } else {
-        setTotalRecords(count || 0);
-      }
-
-      // Query principale con paginazione
+      // Query principale
       let query = supabase
         .from('comune_catasto')
         .select(`
@@ -261,44 +286,123 @@ export const ComuneCatastoPage: React.FC = () => {
         .order('stato', { ascending: true })
         .order('created_at', { ascending: false });
 
-      // Applica filtri
-      if (currentSearchTerm) {
-        query = query.or(`committente.ilike.%${currentSearchTerm}%,indirizzo.ilike.%${currentSearchTerm}%,proprieta.ilike.%${currentSearchTerm}%,proprieta2.ilike.%${currentSearchTerm}%,citta.ilike.%${currentSearchTerm}%,mail.ilike.%${currentSearchTerm}%,note.ilike.%${currentSearchTerm}%,telefono.ilike.%${currentSearchTerm}%,telefono2.ilike.%${currentSearchTerm}%`);
+      // Filtro ricerca multi-campo (committente + proprieta + note)
+      const searchParts: string[] = [];
+      if (currentFilters.committente.trim()) {
+        searchParts.push(`committente.ilike.%${currentFilters.committente}%`);
+      }
+      if (currentFilters.proprieta.trim()) {
+        searchParts.push(`proprieta.ilike.%${currentFilters.proprieta}%,proprieta2.ilike.%${currentFilters.proprieta}%`);
+      }
+      if (currentFilters.note.trim()) {
+        searchParts.push(`note.ilike.%${currentFilters.note}%`);
+      }
+      if (searchParts.length > 0) {
+        const searchFilter = searchParts.join(',');
+        countQuery = countQuery.or(searchFilter);
+        query = query.or(searchFilter);
       }
 
-      if (currentFiltroStato) {
-        query = query.eq('stato', parseInt(currentFiltroStato));
+      // Filtro stato
+      if (currentFilters.stato) {
+        countQuery = countQuery.eq('stato', parseInt(currentFilters.stato));
+        query = query.eq('stato', parseInt(currentFilters.stato));
       }
 
-      if (currentFiltroTipoIncarico) {
-        query = query.eq('tipo_incarico', parseInt(currentFiltroTipoIncarico));
+      // Filtro tipo incarico
+      if (currentFilters.tipo_incarico) {
+        countQuery = countQuery.eq('tipo_incarico', parseInt(currentFilters.tipo_incarico));
+        query = query.eq('tipo_incarico', parseInt(currentFilters.tipo_incarico));
       }
 
-      if (currentFiltroTipoPratica) {
-        query = query.eq('tipo_pratica', parseInt(currentFiltroTipoPratica));
+      // Filtro tipo pratica
+      if (currentFilters.tipo_pratica) {
+        countQuery = countQuery.eq('tipo_pratica', parseInt(currentFilters.tipo_pratica));
+        query = query.eq('tipo_pratica', parseInt(currentFilters.tipo_pratica));
       }
 
-      if (currentFiltriAttivi.comune) {
+      // Filtro comune
+      if (currentFilters.comune === 'yes') {
+        countQuery = countQuery.eq('comune', true);
         query = query.eq('comune', true);
+      } else if (currentFilters.comune === 'no') {
+        countQuery = countQuery.eq('comune', false);
+        query = query.eq('comune', false);
       }
 
-      if (currentFiltriAttivi.catasto) {
+      // Filtro catasto
+      if (currentFilters.catasto === 'yes') {
+        countQuery = countQuery.eq('catasto', true);
         query = query.eq('catasto', true);
+      } else if (currentFilters.catasto === 'no') {
+        countQuery = countQuery.eq('catasto', false);
+        query = query.eq('catasto', false);
       }
 
-      if (currentFiltriAttivi.nonCompletati) {
+      // Filtro fine lavori
+      if (currentFilters.fine_lavori === 'yes') {
+        countQuery = countQuery.eq('fine_lavori', true);
+        query = query.eq('fine_lavori', true);
+      } else if (currentFilters.fine_lavori === 'no') {
+        countQuery = countQuery.eq('fine_lavori', false);
+        query = query.eq('fine_lavori', false);
+      }
+
+      // Filtro pagamento
+      if (currentFilters.pagamento !== 'all') {
+        let statiFiltroNonPagata: number[] = [];
+        const { data: statiNonPagata } = await supabase
+          .from('stati_generali')
+          .select('id')
+          .eq('filtro_non_pagata', 1);
+        statiFiltroNonPagata = (statiNonPagata || []).map((s: { id: number }) => s.id);
+
+        if (currentFilters.pagamento === 'no') {
+          if (statiFiltroNonPagata.length > 0) {
+            countQuery = countQuery.eq('pagamento', false).in('stato', statiFiltroNonPagata);
+            query = query.eq('pagamento', false).in('stato', statiFiltroNonPagata);
+          } else {
+            countQuery = countQuery.eq('pagamento', false);
+            query = query.eq('pagamento', false);
+          }
+        } else if (currentFilters.pagamento === 'yes') {
+          countQuery = countQuery.eq('pagamento', true);
+          query = query.eq('pagamento', true);
+        }
+      }
+
+      // Filtri preimpostati
+      if (currentPresetFilters.nonCompletati) {
+        countQuery = countQuery.neq('stato', 3);
         query = query.neq('stato', 3);
       }
 
-      if (currentFiltriAttivi.nonPagati) {
-        query = query.eq('pagamento', false).neq('stato', 1);
+      if (currentPresetFilters.nonPagati) {
+        let statiFiltroNonPagata: number[] = [];
+        const { data: statiNonPagata } = await supabase
+          .from('stati_generali')
+          .select('id')
+          .eq('filtro_non_pagata', 1);
+        statiFiltroNonPagata = (statiNonPagata || []).map((s: { id: number }) => s.id);
+
+        if (statiFiltroNonPagata.length > 0) {
+          countQuery = countQuery.eq('pagamento', false).in('stato', statiFiltroNonPagata);
+          query = query.eq('pagamento', false).in('stato', statiFiltroNonPagata);
+        } else {
+          countQuery = countQuery.eq('pagamento', false);
+          query = query.eq('pagamento', false);
+        }
       }
 
-      if (currentFiltriAttivi.completateNonPagate) {
-        query = query.eq('stato', 3).eq('pagamento', false);
+      // Conteggio totale
+      const { count, error: countError } = await countQuery;
+      if (countError) {
+        console.error('Errore nel conteggio:', countError);
+      } else {
+        setTotalRecords(count || 0);
       }
 
-      // Applica paginazione
+      // Paginazione
       const from = (currentPageParam - 1) * currentPerPage;
       const to = from + currentPerPage - 1;
       query = query.range(from, to);
@@ -311,29 +415,17 @@ export const ComuneCatastoPage: React.FC = () => {
         return;
       }
 
-      // Carica stati e tipi incarico per i dropdown
-      const [statiResult, tipiResult, tipiPraticaResult] = await Promise.all([
-        supabase.from('stati_generali').select('*').order('ordinamento'),
-        supabase.from('tipi_incarico').select('*').order('descrizione'),
-        supabase.from('tipi_pratica').select('*').order('descrizione')
-      ]);
+      // Carica stati e tipi (solo se non già caricati)
+      if (stati.length === 0 || tipiIncarico.length === 0 || tipiPratica.length === 0) {
+        const [statiResult, tipiResult, tipiPraticaResult] = await Promise.all([
+          supabase.from('stati_generali').select('*').order('ordinamento'),
+          supabase.from('tipi_incarico').select('*').order('descrizione'),
+          supabase.from('tipi_pratica').select('*').order('descrizione')
+        ]);
 
-      if (statiResult.error) {
-        console.error('Errore caricamento stati:', statiResult.error);
-      } else {
-        setStati(statiResult.data || []);
-      }
-
-      if (tipiResult.error) {
-        console.error('Errore caricamento tipi incarico:', tipiResult.error);
-      } else {
-        setTipiIncarico(tipiResult.data || []);
-      }
-
-      if (tipiPraticaResult.error) {
-        console.error('Errore caricamento tipi pratica:', tipiPraticaResult.error);
-      } else {
-        setTipiPratica(tipiPraticaResult.data || []);
+        if (!statiResult.error) setStati(statiResult.data || []);
+        if (!tipiResult.error) setTipiIncarico(tipiResult.data || []);
+        if (!tipiPraticaResult.error) setTipiPratica(tipiPraticaResult.data || []);
       }
 
       setPratiche(praticheData || []);
@@ -357,24 +449,21 @@ export const ComuneCatastoPage: React.FC = () => {
 
     console.log('Setting up realtime subscription for ComuneCatasto flags, user:', user.id);
 
-    // Create a channel for realtime updates
     const channel = supabase
       .channel('comune-catasto-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'comune_catasto',
-          filter: `user_id=eq.${user.id}` // Only listen to changes for current user
+          filter: `user_id=eq.${user.id}`
         },
         async (payload) => {
           console.log('Realtime update received for ComuneCatasto:', payload);
           setLastUpdateTime(new Date());
 
-          // Simple update logic - just update the local state for any change
           if (payload.eventType === 'INSERT') {
-            // For INSERT, fetch the complete record with joined data
             const { data: newRecord, error } = await supabase
               .from('comune_catasto')
               .select(`
@@ -388,7 +477,6 @@ export const ComuneCatastoPage: React.FC = () => {
 
             if (!error && newRecord) {
               setPratiche(prev => {
-                // Check if it already exists to avoid duplicates
                 if (prev.some(p => p.id === newRecord.id)) {
                   return prev;
                 }
@@ -399,7 +487,6 @@ export const ComuneCatastoPage: React.FC = () => {
             }
           }
           else if (payload.eventType === 'UPDATE') {
-            // For UPDATE, fetch the complete record with joined data
             const { data: updatedRecord, error } = await supabase
               .from('comune_catasto')
               .select(`
@@ -412,16 +499,14 @@ export const ComuneCatastoPage: React.FC = () => {
               .single();
 
             if (!error && updatedRecord) {
-              // Simple update - just replace the record in the array
               setPratiche(prev =>
                 prev.map(pratica =>
                   pratica.id === updatedRecord.id ? updatedRecord : pratica
                 )
               );
 
-              // Show specific toast based on what changed
               const oldPratica = payload.old as ComuneCatasto;
-              let messaggiToast: string[] = [];
+              const messaggiToast: string[] = [];
 
               if (oldPratica.pagamento !== updatedRecord.pagamento) {
                 messaggiToast.push(updatedRecord.pagamento ? 'Pagamento marcato come effettuato' : 'Pagamento marcato come non effettuato');
@@ -441,13 +526,10 @@ export const ComuneCatastoPage: React.FC = () => {
                 messaggiToast.push(`Stato cambiato da "${oldStato}" a "${newStato}"`);
               }
 
-              // Mostra i messaggi di toast
               if (messaggiToast.length > 0) {
-                // Se c'è solo un messaggio, mostralo normalmente
                 if (messaggiToast.length === 1) {
                   toast.success(messaggiToast[0]);
                 } else {
-                  // Se ci sono più messaggi (es. flag + stato), mostra il primo o un messaggio combinato
                   toast.success(messaggiToast[0]);
                   console.log('Altri aggiornamenti:', messaggiToast.slice(1));
                 }
@@ -455,7 +537,6 @@ export const ComuneCatastoPage: React.FC = () => {
             }
           }
           else if (payload.eventType === 'DELETE') {
-            // Remove deleted record
             const deletedId = payload.old.id;
             setPratiche(prev => prev.filter(pratica => pratica.id !== deletedId));
             setTotalRecords(prev => Math.max(0, prev - 1));
@@ -470,7 +551,6 @@ export const ComuneCatastoPage: React.FC = () => {
         }
       });
 
-    // Cleanup subscription on unmount
     return () => {
       console.log('Cleaning up ComuneCatasto realtime subscription');
       supabase.removeChannel(channel);
@@ -478,24 +558,39 @@ export const ComuneCatastoPage: React.FC = () => {
     };
   }, [user?.id, stati, tipiIncarico, tipiPratica]);
 
-  const handleSearch = () => {
-    fetchData();
+  const handleColumnFilterChange = useCallback((key: keyof typeof columnFilters, value: string | 'all' | 'yes' | 'no') => {
+    setColumnFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  }, []);
+
+  const handleResetFilters = () => {
+    const defaultFilters: typeof columnFilters = {
+      stato: '', committente: '', proprieta: '', note: '',
+      tipo_incarico: '', tipo_pratica: '',
+      comune: 'all', catasto: 'all', fine_lavori: 'all', pagamento: 'all'
+    };
+    const defaultPresetFilters = { nonCompletati: false, nonPagati: false };
+    setColumnFilters(defaultFilters);
+    setPresetFilters(defaultPresetFilters);
+    setCurrentPage(1);
+    fetchData({ columnFilters: defaultFilters, presetFilters: defaultPresetFilters, page: 1 });
   };
 
-  const handleFilterToggle = (filterName: keyof typeof filtriAttivi) => {
-    const newFiltriAttivi = {
-      ...filtriAttivi,
-      [filterName]: !filtriAttivi[filterName]
+  const handleApplyFilter = (overrides: Partial<typeof columnFilters>) => {
+    const newFilters = { ...columnFilters, ...overrides };
+    setColumnFilters(newFilters);
+    setCurrentPage(1);
+    fetchData({ columnFilters: newFilters, page: 1 });
+  };
+
+  const handlePresetFilterToggle = (filterName: keyof typeof presetFilters) => {
+    const newPresetFilters = {
+      ...presetFilters,
+      [filterName]: !presetFilters[filterName]
     };
-
-    setFiltriAttivi(newFiltriAttivi);
-    setCurrentPage(1); // Reset alla prima pagina quando cambiano i filtri
-
-    // Trigger automatico della ricerca con i nuovi filtri
-    fetchData({
-      filtriAttivi: newFiltriAttivi,
-      page: 1
-    });
+    setPresetFilters(newPresetFilters);
+    setCurrentPage(1);
+    fetchData({ presetFilters: newPresetFilters, page: 1 });
   };
 
   const handlePageChange = (page: number) => {
@@ -507,10 +602,7 @@ export const ComuneCatastoPage: React.FC = () => {
     setRecordsPerPage(newRecordsPerPage);
     localStorage.setItem('comune-catasto-records-per-page', newRecordsPerPage.toString());
     setCurrentPage(1);
-    fetchData({
-      perPage: newRecordsPerPage,
-      page: 1
-    });
+    fetchData({ perPage: newRecordsPerPage, page: 1 });
   };
 
   const getTotalPages = () => {
@@ -518,7 +610,6 @@ export const ComuneCatastoPage: React.FC = () => {
   };
 
   const handleToggleField = async (pratica: ComuneCatasto, field: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
-    // Verifica se il campo può essere modificato
     if (!isFlagAbilitatoInTabella(pratica, field)) {
       toast.error(`Il campo ${field} non può essere modificato per questo tipo di incarico`);
       return;
@@ -528,13 +619,11 @@ export const ComuneCatastoPage: React.FC = () => {
       const newValue = !pratica[field];
       console.log(`Toggling ${field} for pratica ${pratica.id} from ${pratica[field]} to ${newValue}`);
 
-      // Se stiamo disabilitando il comune, dobbiamo anche disabilitare fine_lavori
       const updateData: any = { [field]: newValue };
       if (field === 'comune' && !newValue) {
         updateData.fine_lavori = false;
       }
 
-      // Verifica se la pratica deve essere marcata come completata
       const praticaAggiornata = { ...pratica, ...updateData };
       const statoCompletata = await verificaEAggiornaStatoCompletata(praticaAggiornata);
       if (statoCompletata) {
@@ -552,14 +641,12 @@ export const ComuneCatastoPage: React.FC = () => {
         return;
       }
 
-      // Forza un aggiornamento locale immediato per feedback visivo istantaneo
       setPratiche(prev =>
         prev.map(p =>
           p.id === pratica.id
             ? {
               ...p,
               ...updateData,
-              // Se lo stato è stato aggiornato automaticamente, includi anche quello
               ...(statoCompletata ? {
                 stato: statoCompletata,
                 stato_info: stati.find(s => s.id === statoCompletata) || p.stato_info
@@ -587,12 +674,10 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
-  // Funzione per verificare se la pratica deve essere marcata come completata o in corso
   const verificaEAggiornaStatoCompletata = async (pratica: ComuneCatasto): Promise<number | null> => {
     const tipoIncarico = pratica.tipo_incarico_info;
     if (!tipoIncarico) return null;
 
-    // Trova gli stati "Completata" e "In corso" nella lista degli stati
     const statoCompletata = stati.find(stato =>
       stato.descrizione.toLowerCase().includes('completata') ||
       stato.descrizione.toLowerCase().includes('completato')
@@ -614,30 +699,24 @@ export const ComuneCatastoPage: React.FC = () => {
       return null;
     }
 
-    // Verifica se tutti i flag richiesti sono a true
     let tuttiIFlagCompletati = true;
 
-    // Controlla il flag comune se richiesto dal tipo di incarico
     if (tipoIncarico.comune && !pratica.comune) {
       tuttiIFlagCompletati = false;
     }
 
-    // Controlla il flag catasto se richiesto dal tipo di incarico
     if (tipoIncarico.catasto && !pratica.catasto) {
       tuttiIFlagCompletati = false;
     }
 
-    // Se il tipo di incarico prevede il comune, controlla anche fine_lavori
     if (tipoIncarico.comune && !pratica.fine_lavori) {
       tuttiIFlagCompletati = false;
     }
 
-    // Se tutti i flag sono completati e lo stato non è già "Completata"
     if (tuttiIFlagCompletati && pratica.stato !== statoCompletata.id) {
       return statoCompletata.id;
     }
 
-    // Se non tutti i flag sono completati e lo stato è "Completata", torna a "In corso"
     if (!tuttiIFlagCompletati && pratica.stato === statoCompletata.id) {
       return statoInCorso.id;
     }
@@ -645,7 +724,6 @@ export const ComuneCatastoPage: React.FC = () => {
     return null;
   };
 
-  // Funzione per verificare se un flag è abilitato nella tabella
   const isFlagAbilitatoInTabella = (pratica: ComuneCatasto, flagName: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
     const tipoIncarico = pratica.tipo_incarico_info;
 
@@ -655,10 +733,8 @@ export const ComuneCatastoPage: React.FC = () => {
       case 'catasto':
         return tipoIncarico?.catasto === true;
       case 'fine_lavori':
-        // Fine lavori si abilita solo se il flag comune della pratica è true
         return pratica.comune === true;
       case 'pagamento':
-        // Il pagamento è sempre abilitato
         return true;
       default:
         return false;
@@ -690,15 +766,10 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
-  // Funzione per formattare il numero di telefono
   const formatTelefono = (value: string): string => {
-    // Rimuove tutti i caratteri non numerici
     const numericValue = value.replace(/\D/g, '');
-
-    // Limita a 10 cifre
     const limitedValue = numericValue.slice(0, 10);
 
-    // Applica la formattazione XXX XXX XXXX
     if (limitedValue.length <= 3) {
       return limitedValue;
     } else if (limitedValue.length <= 6) {
@@ -708,7 +779,6 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
-  // Funzione per combinare i telefoni
   const combineTelefoni = (telefono1: string | null | undefined, telefono2: string | null | undefined): string => {
     const formatted1 = telefono1 ? formatTelefono(telefono1) : '';
     const formatted2 = telefono2 ? formatTelefono(telefono2) : '';
@@ -720,7 +790,6 @@ export const ComuneCatastoPage: React.FC = () => {
     return `${formatted1} / ${formatted2}`;
   };
 
-  // Funzione per combinare le proprietà
   const combineProprieta = (proprieta1: string | null | undefined, proprieta2: string | null | undefined): string => {
     if (!proprieta1 && !proprieta2) return '-';
     if (!proprieta2) return proprieta1 || '-';
@@ -803,7 +872,6 @@ export const ComuneCatastoPage: React.FC = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    // Protezione contro eventi malformati da estensioni
     if (!e || !e.target) {
       console.warn('Evento malformato ignorato');
       return;
@@ -811,7 +879,6 @@ export const ComuneCatastoPage: React.FC = () => {
 
     const { name, value, type } = e.target;
 
-    // Verifica che name sia definito
     if (!name) {
       console.warn('Nome campo non definito');
       return;
@@ -819,12 +886,10 @@ export const ComuneCatastoPage: React.FC = () => {
 
     let processedValue = value;
 
-    // Formatta il telefono se è il campo telefono
     if (name === 'telefono' && type !== 'checkbox') {
       processedValue = formatTelefono(value);
     }
 
-    // Formatta il telefono2 se è il campo telefono2
     if (name === 'telefono2' && type !== 'checkbox') {
       processedValue = formatTelefono(value);
     }
@@ -853,7 +918,6 @@ export const ComuneCatastoPage: React.FC = () => {
         user_id: user?.id
       };
 
-      // Verifica se la pratica deve essere marcata come completata
       const tipoIncaricoSelezionato = getTipoIncaricoSelezionato();
       if (tipoIncaricoSelezionato) {
         const praticaSimulata = {
@@ -886,7 +950,6 @@ export const ComuneCatastoPage: React.FC = () => {
       }
 
       if (editingPratica) {
-        // Modifica pratica esistente
         const { error } = await supabase
           .from('comune_catasto')
           .update(dataToSave)
@@ -899,7 +962,6 @@ export const ComuneCatastoPage: React.FC = () => {
           return;
         }
 
-        // Aggiornamento locale immediato per feedback visivo istantaneo
         if (dataToSave.stato !== undefined) {
           setPratiche(prev =>
             prev.map(p =>
@@ -943,7 +1005,6 @@ export const ComuneCatastoPage: React.FC = () => {
         }
         toast.success(messaggioSuccesso);
       } else {
-        // Crea nuova pratica
         const { error } = await supabase
           .from('comune_catasto')
           .insert([dataToSave]);
@@ -965,7 +1026,6 @@ export const ComuneCatastoPage: React.FC = () => {
         }
         toast.success(messaggioSuccesso);
 
-        // Creazione automatica pratica APE se il tipo di incarico ha il flag ape
         if (tipoIncaricoSelezionato?.ape) {
           try {
             const { error: apeError } = await supabase
@@ -998,7 +1058,6 @@ export const ComuneCatastoPage: React.FC = () => {
         }
       }
 
-      // Sync contatto con rubrica
       await syncRubricaFromPratica(
         formData.proprieta,
         formData.telefono,
@@ -1007,7 +1066,6 @@ export const ComuneCatastoPage: React.FC = () => {
       );
 
       closeModal();
-      // Forza il refresh del componente dopo il salvataggio
       fetchData();
     } catch (error) {
       console.error('Errore:', error);
@@ -1019,7 +1077,6 @@ export const ComuneCatastoPage: React.FC = () => {
 
   const openModal = (pratica?: ComuneCatasto) => {
     if (pratica) {
-      // Modalità modifica
       setEditingPratica(pratica);
       const editFormData = {
         committente: pratica.committente,
@@ -1042,7 +1099,6 @@ export const ComuneCatastoPage: React.FC = () => {
 
       setFormData(editFormData);
     } else {
-      // Modalità creazione
       setEditingPratica(null);
       const newFormData = {
         committente: '',
@@ -1092,13 +1148,11 @@ export const ComuneCatastoPage: React.FC = () => {
     });
   };
 
-  // Funzione per ottenere il tipo di incarico selezionato
   const getTipoIncaricoSelezionato = () => {
     if (!formData.tipo_incarico) return null;
     return tipiIncarico.find(tipo => tipo.id === parseInt(formData.tipo_incarico));
   };
 
-  // Funzione per verificare se un flag è abilitato
   const isFlagAbilitato = (flagName: 'comune' | 'catasto' | 'fine_lavori' | 'pagamento') => {
     const tipoSelezionato = getTipoIncaricoSelezionato();
 
@@ -1108,17 +1162,14 @@ export const ComuneCatastoPage: React.FC = () => {
       case 'catasto':
         return tipoSelezionato?.catasto === true;
       case 'fine_lavori':
-        // Fine lavori si abilita solo se il flag comune della pratica è true
         return formData.comune === true;
       case 'pagamento':
-        // Il pagamento è sempre abilitato
         return true;
       default:
         return false;
     }
   };
 
-  // Gestione del cambio di tipo incarico
   const handleTipoIncaricoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nuovoTipoIncarico = e.target.value;
     const tipoSelezionato = tipiIncarico.find(tipo => tipo.id === parseInt(nuovoTipoIncarico));
@@ -1129,10 +1180,9 @@ export const ComuneCatastoPage: React.FC = () => {
         tipo_incarico: nuovoTipoIncarico
       };
 
-      // Reset dei flag se il nuovo tipo di incarico non li supporta
       if (!tipoSelezionato?.comune) {
         nuovoFormData.comune = false;
-        nuovoFormData.fine_lavori = false; // Se comune diventa false, anche fine_lavori deve diventare false
+        nuovoFormData.fine_lavori = false;
       }
 
       if (!tipoSelezionato?.catasto) {
@@ -1143,27 +1193,23 @@ export const ComuneCatastoPage: React.FC = () => {
     });
   };
 
-  // Gestione del cambio del flag comune
   const handleComuneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nuovoComune = e.target.checked;
 
     setFormData(prev => ({
       ...prev,
       comune: nuovoComune,
-      // Se comune diventa false, anche fine_lavori deve diventare false
       fine_lavori: nuovoComune ? prev.fine_lavori : false
     }));
   };
 
   const getStatoStyle = (stato: StatoGenerale | undefined) => {
     if (!stato || !stato.colore) return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
-
-    // Usa direttamente il colore dalla tabella stati_generali
     return `text-white`;
   };
 
   const getStatoBackgroundColor = (stato: StatoGenerale | undefined) => {
-    if (!stato || !stato.colore) return '#6b7280'; // gray-500 come fallback
+    if (!stato || !stato.colore) return '#6b7280';
     return stato.colore;
   };
 
@@ -1209,237 +1255,62 @@ export const ComuneCatastoPage: React.FC = () => {
               </div>
             )}
           </div>
-          <button
-            onClick={() => openModal()}
-            className="btn btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Nuova Pratica
-          </button>
+          <div className="flex items-center gap-3">
+            {activeFilterCount > 0 && (
+              <button
+                onClick={handleResetFilters}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Reset filtri
+                <span className="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  {activeFilterCount}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={() => openModal()}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Nuova Pratica
+            </button>
+          </div>
         </div>
 
-        {/* Filtri */}
-        <div className="card space-y-4 dark:bg-gray-800 dark:border-gray-700">
-          {/* Prima riga - Ricerca e dropdown */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Campo di ricerca */}
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Cerca committente, indirizzo..."
-                className="input pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-              <button
-                onClick={handleSearch}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-500 text-white p-1 rounded"
-              >
-                <Search className="w-4 h-4" />
-              </button>
-            </div>
+        {/* Filtri preimpostati */}
+        <div className="flex flex-wrap gap-3">
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200 ${
+            presetFilters.nonCompletati
+              ? 'bg-orange-500 text-white shadow-md'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+          }`}>
+            <input
+              type="checkbox"
+              checked={presetFilters.nonCompletati}
+              onChange={() => handlePresetFilterToggle('nonCompletati')}
+              className="sr-only"
+            />
+            Non completati
+          </label>
 
-            {/* Filtro Stati */}
-            <div className="relative">
-              <select
-                value={filtroStato}
-                onChange={(e) => {
-                  const newFiltroStato = e.target.value;
-                  setFiltroStato(newFiltroStato);
-                  setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
-                  // Trigger automatico della ricerca con il nuovo stato
-                  fetchData({
-                    filtroStato: newFiltroStato,
-                    page: 1
-                  });
-                }}
-                className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              >
-                <option value="">-- Tutti gli stati --</option>
-                {stati.map((stato) => (
-                  <option key={stato.id} value={stato.id}>
-                    {stato.descrizione}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-            </div>
-
-            {/* Filtro Tipi Incarico */}
-            <div className="relative">
-              <select
-                value={filtroTipoIncarico}
-                onChange={(e) => {
-                  const newFiltroTipoIncarico = e.target.value;
-                  setFiltroTipoIncarico(newFiltroTipoIncarico);
-                  setCurrentPage(1); // Reset alla prima pagina quando cambia il filtro
-                  // Trigger automatico della ricerca con il nuovo tipo incarico
-                  fetchData({
-                    filtroTipoIncarico: newFiltroTipoIncarico,
-                    page: 1
-                  });
-                }}
-                className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              >
-                <option value="">-- Tutti i tipi di incarico --</option>
-                {tipiIncarico.map((tipo) => (
-                  <option key={tipo.id} value={tipo.id}>
-                    {tipo.descrizione}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-            </div>
-
-            {/* Filtro Tipi Pratica */}
-            <div className="relative">
-              <select
-                value={filtroTipoPratica}
-                onChange={(e) => {
-                  const newFiltroTipoPratica = e.target.value;
-                  setFiltroTipoPratica(newFiltroTipoPratica);
-                  setCurrentPage(1);
-                  fetchData({
-                    filtroTipoPratica: newFiltroTipoPratica,
-                    page: 1
-                  });
-                }}
-                className="input pr-8 appearance-none dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              >
-                <option value="">-- Tutti i tipi di pratica --</option>
-                {tipiPratica.map((tipo) => (
-                  <option key={tipo.id} value={tipo.id}>
-                    {tipo.descrizione}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-            </div>
-          </div>
-
-          {/* Seconda riga - Filtri toggle */}
-          <div className="flex flex-wrap gap-4">
-            <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filtriAttivi.comune
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}>
-              <input
-                type="checkbox"
-                checked={filtriAttivi.comune}
-                onChange={() => handleFilterToggle('comune')}
-                className="sr-only"
-              />
-              <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${filtriAttivi.comune
-                  ? 'border-white bg-white'
-                  : 'border-gray-400 dark:border-gray-500 bg-transparent'
-                }`}>
-                {filtriAttivi.comune && (
-                  <svg className="w-3 h-3 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <span className="text-sm font-medium">Comune</span>
-            </label>
-
-            <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filtriAttivi.catasto
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}>
-              <input
-                type="checkbox"
-                checked={filtriAttivi.catasto}
-                onChange={() => handleFilterToggle('catasto')}
-                className="sr-only"
-              />
-              <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${filtriAttivi.catasto
-                  ? 'border-white bg-white'
-                  : 'border-gray-400 dark:border-gray-500 bg-transparent'
-                }`}>
-                {filtriAttivi.catasto && (
-                  <svg className="w-3 h-3 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <span className="text-sm font-medium">Catasto</span>
-            </label>
-
-            <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filtriAttivi.nonCompletati
-                ? 'bg-orange-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}>
-              <input
-                type="checkbox"
-                checked={filtriAttivi.nonCompletati}
-                onChange={() => handleFilterToggle('nonCompletati')}
-                className="sr-only"
-              />
-              <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${filtriAttivi.nonCompletati
-                  ? 'border-white bg-white'
-                  : 'border-gray-400 dark:border-gray-500 bg-transparent'
-                }`}>
-                {filtriAttivi.nonCompletati && (
-                  <svg className="w-3 h-3 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <span className="text-sm font-medium">Non completati</span>
-            </label>
-
-            <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filtriAttivi.nonPagati
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}>
-              <input
-                type="checkbox"
-                checked={filtriAttivi.nonPagati}
-                onChange={() => handleFilterToggle('nonPagati')}
-                className="sr-only"
-              />
-              <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${filtriAttivi.nonPagati
-                  ? 'border-white bg-white'
-                  : 'border-gray-400 dark:border-gray-500 bg-transparent'
-                }`}>
-                {filtriAttivi.nonPagati && (
-                  <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <span className="text-sm font-medium">Non pagati</span>
-            </label>
-
-            <label className={`flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200 ${filtriAttivi.completateNonPagate
-                ? 'bg-green-600 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}>
-              <input
-                type="checkbox"
-                checked={filtriAttivi.completateNonPagate}
-                onChange={() => handleFilterToggle('completateNonPagate')}
-                className="sr-only"
-              />
-              <div className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center transition-colors ${filtriAttivi.completateNonPagate
-                  ? 'border-white bg-white'
-                  : 'border-gray-400 dark:border-gray-500 bg-transparent'
-                }`}>
-                {filtriAttivi.completateNonPagate && (
-                  <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <span className="text-sm font-medium">Completate non pagate</span>
-            </label>
-          </div>
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200 ${
+            presetFilters.nonPagati
+              ? 'bg-blue-500 text-white shadow-md'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+          }`}>
+            <input
+              type="checkbox"
+              checked={presetFilters.nonPagati}
+              onChange={() => handlePresetFilterToggle('nonPagati')}
+              className="sr-only"
+            />
+            Non pagati
+          </label>
         </div>
 
         {/* Tabella - Container con altezza flessibile e scroll interno */}
-        <div className="card p-0 dark:bg-gray-800 dark:border-gray-700 flex-1" style={{ height: 'calc(100vh - 400px)', overflow: 'hidden' }}>
+        <div className="card p-0 dark:bg-gray-800 dark:border-gray-700 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
           <div className="overflow-x-auto h-full overflow-y-auto">
             <table className="w-full" style={{ minHeight: '400px' }}>
               <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
@@ -1474,6 +1345,111 @@ export const ComuneCatastoPage: React.FC = () => {
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Pagamento
                   </th>
+                </tr>
+                {/* Riga filtri inline */}
+                <tr className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
+                  <td className="px-2 py-1.5">
+                    <div className="relative">
+                      <select
+                        value={columnFilters.stato}
+                        onChange={(e) => handleApplyFilter({ stato: e.target.value })}
+                        className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="" className="bg-white dark:bg-gray-700 dark:text-gray-200">Tutti</option>
+                        {stati.map((stato) => (
+                          <option key={stato.id} value={stato.id} className="bg-white dark:bg-gray-700 dark:text-gray-200">
+                            {stato.descrizione}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.committente}
+                      onChange={(e) => handleColumnFilterChange('committente', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.proprieta}
+                      onChange={(e) => handleColumnFilterChange('proprieta', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="text"
+                      value={columnFilters.note}
+                      onChange={(e) => handleColumnFilterChange('note', e.target.value)}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="relative">
+                      <select
+                        value={columnFilters.tipo_incarico}
+                        onChange={(e) => handleApplyFilter({ tipo_incarico: e.target.value })}
+                        className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="" className="bg-white dark:bg-gray-700 dark:text-gray-200">Tutti</option>
+                        {tipiIncarico.map((tipo) => (
+                          <option key={tipo.id} value={tipo.id} className="bg-white dark:bg-gray-700 dark:text-gray-200">
+                            {tipo.descrizione}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="relative">
+                      <select
+                        value={columnFilters.tipo_pratica}
+                        onChange={(e) => handleApplyFilter({ tipo_pratica: e.target.value })}
+                        className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="" className="bg-white dark:bg-gray-700 dark:text-gray-200">Tutti</option>
+                        {tipiPratica.map((tipo) => (
+                          <option key={tipo.id} value={tipo.id} className="bg-white dark:bg-gray-700 dark:text-gray-200">
+                            {tipo.descrizione}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <TriStateFilter
+                      value={columnFilters.comune}
+                      onChange={(v) => handleApplyFilter({ comune: v })}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <TriStateFilter
+                      value={columnFilters.catasto}
+                      onChange={(v) => handleApplyFilter({ catasto: v })}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <TriStateFilter
+                      value={columnFilters.fine_lavori}
+                      onChange={(v) => handleApplyFilter({ fine_lavori: v })}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    <TriStateFilter
+                      value={columnFilters.pagamento}
+                      onChange={(v) => handleApplyFilter({ pagamento: v })}
+                    />
+                  </td>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -1589,14 +1565,11 @@ export const ComuneCatastoPage: React.FC = () => {
           {pratiche.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
               <div className="flex items-center justify-between flex-wrap gap-4">
-                {/* Info record */}
                 <div className="text-sm text-gray-500 dark:text-gray-400">
                   Mostrando {Math.min((currentPage - 1) * recordsPerPage + 1, totalRecords)} - {Math.min(currentPage * recordsPerPage, totalRecords)} di {totalRecords} pratiche
                 </div>
 
-                {/* Controlli centrali */}
                 <div className="flex items-center gap-4">
-                  {/* Selezione record per pagina */}
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-500 dark:text-gray-400">Record:</span>
                     <select
@@ -1611,10 +1584,8 @@ export const ComuneCatastoPage: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Controlli navigazione */}
                   {getTotalPages() > 1 && (
                     <div className="flex items-center gap-2">
-                      {/* Prima pagina */}
                       <button
                         onClick={() => handlePageChange(1)}
                         disabled={currentPage === 1}
@@ -1623,7 +1594,6 @@ export const ComuneCatastoPage: React.FC = () => {
                         ««
                       </button>
 
-                      {/* Pagina precedente */}
                       <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
@@ -1632,7 +1602,6 @@ export const ComuneCatastoPage: React.FC = () => {
                         ‹
                       </button>
 
-                      {/* Numeri pagina */}
                       {Array.from({ length: Math.min(5, getTotalPages()) }, (_, i) => {
                         let pageNum;
                         if (getTotalPages() <= 5) {
@@ -1659,7 +1628,6 @@ export const ComuneCatastoPage: React.FC = () => {
                         );
                       })}
 
-                      {/* Pagina successiva */}
                       <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === getTotalPages()}
@@ -1668,7 +1636,6 @@ export const ComuneCatastoPage: React.FC = () => {
                         ›
                       </button>
 
-                      {/* Ultima pagina */}
                       <button
                         onClick={() => handlePageChange(getTotalPages())}
                         disabled={currentPage === getTotalPages()}
@@ -1680,7 +1647,6 @@ export const ComuneCatastoPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Info pagine */}
                 {getTotalPages() > 1 && (
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     Pagina {currentPage} di {getTotalPages()}
@@ -1711,7 +1677,6 @@ export const ComuneCatastoPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Prima colonna */}
                   <div className="space-y-4">
-                    {/* Committente */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Committente *
@@ -1727,7 +1692,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Stato */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Stato
@@ -1750,7 +1714,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Proprietà */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Proprietà
@@ -1770,7 +1733,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Proprietà 2 */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Proprietà 2
@@ -1785,7 +1747,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Indirizzo */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Indirizzo
@@ -1800,7 +1761,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Città */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Città
@@ -1818,7 +1778,6 @@ export const ComuneCatastoPage: React.FC = () => {
 
                   {/* Seconda colonna */}
                   <div className="space-y-4">
-                    {/* Telefono */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Telefono
@@ -1833,7 +1792,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Telefono 2 */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Telefono 2
@@ -1848,7 +1806,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Email */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Email
@@ -1863,7 +1820,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Tipo Incarico */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Tipo Incarico
@@ -1886,7 +1842,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Tipo Pratica */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Tipo Pratica
@@ -1909,7 +1864,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Note - Spostate sopra i flag */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Note
@@ -1924,7 +1878,6 @@ export const ComuneCatastoPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Checkboxes con stile migliorato */}
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${!isFlagAbilitato('comune')
@@ -2085,11 +2038,7 @@ export const ComuneCatastoPage: React.FC = () => {
 
       {/* Menu Contestuale */}
       {contextMenu.pratica && (
-        <div
-          className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[200px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={contextMenu.x} y={contextMenu.y}>
           <button
             onClick={() => handleContextMenuAction('edit', contextMenu.pratica!)}
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -2127,7 +2076,7 @@ export const ComuneCatastoPage: React.FC = () => {
             <Trash2 className="w-4 h-4" />
             Elimina
           </button>
-        </div>
+        </ContextMenu>
       )}
 
       {/* Modal Cambia Stato da Menu Contestuale */}

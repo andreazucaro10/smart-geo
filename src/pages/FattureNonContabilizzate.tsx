@@ -18,7 +18,7 @@ export const FattureNonContabilizzate: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filtroProprietario, setFiltroProprietario] = useState('');
   const [filtroMese, setFiltroMese] = useState('');
-  const [filtroAnno, setFiltroAnno] = useState('');
+  const [filtroAnno, setFiltroAnno] = useState(new Date().getFullYear().toString());
   const [showModal, setShowModal] = useState(false);
   const [editingFattura, setEditingFattura] = useState<FatturaNonContabilizzata | null>(null);
   const [formData, setFormData] = useState<FormData>({
@@ -464,9 +464,6 @@ export const FattureNonContabilizzate: React.FC = () => {
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Proprietà
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Data Emissione
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -479,9 +476,6 @@ export const FattureNonContabilizzate: React.FC = () => {
                   Guadagno netto (€)
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Note
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Azioni
                 </th>
               </tr>
@@ -489,7 +483,7 @@ export const FattureNonContabilizzate: React.FC = () => {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Caricamento...</span>
@@ -498,30 +492,24 @@ export const FattureNonContabilizzate: React.FC = () => {
                 </tr>
               ) : fatture.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nessuna fattura trovata
                   </td>
                 </tr>
               ) : (
                 fatture.map((fattura) => (
                   <tr key={fattura.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {fattura.nome}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {formatDate(fattura.data_emissione)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600 dark:text-green-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 dark:text-blue-400">
                       {formatCurrency(fattura.totale)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 dark:text-red-400">
                       {formatCurrency(fattura.spese)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 dark:text-blue-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600 dark:text-green-400">
                       {formatCurrency(fattura.totale - fattura.spese)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
-                      {fattura.note || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center gap-2">
@@ -552,17 +540,15 @@ export const FattureNonContabilizzate: React.FC = () => {
                   <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-gray-100">
                     TOTALI
                   </td>
-                  <td className="px-6 py-4"></td>
-                  <td className="px-6 py-4 text-sm font-bold text-green-700 dark:text-green-400">
+                  <td className="px-6 py-4 text-sm font-bold text-blue-700 dark:text-blue-400">
                     {formatCurrency(totals.totale)}
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-red-700 dark:text-red-400">
                     {formatCurrency(totals.spese)}
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold text-blue-700 dark:text-blue-400">
+                  <td className="px-6 py-4 text-sm font-bold text-green-700 dark:text-green-400">
                     {formatCurrency(totals.netProfit)}
                   </td>
-                  <td className="px-6 py-4"></td>
                   <td className="px-6 py-4"></td>
                 </tr>
               </tfoot>
