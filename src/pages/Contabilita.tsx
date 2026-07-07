@@ -745,12 +745,12 @@ export const Contabilita: React.FC = () => {
  <th className="px-6 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
  Bolli (€)
  </th>
- <th className="px-6 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
- Tasse (€)
- </th>
- <th className="px-6 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
- Fatturato (€)
- </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+            Fatturato (€)
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+            Tasse (€)
+          </th>
  <th className="px-6 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
  Guadagno Netto (€)
  </th>
@@ -817,7 +817,7 @@ export const Contabilita: React.FC = () => {
  </tr>
  )}
  <tr 
- className={`hover:bg-ink-50 ${fattura.fattura_per_detrazione ? 'bg-red-50' : (index % 2 === 0 ? '' : 'bg-ink-50')}`}
+ className={`hover:bg-ink-50 ${(index % 2 === 0 ? '' : 'bg-ink-50')}`}
  onContextMenu={(e) => handleContextMenu(e, fattura)}
  >
  <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-900">
@@ -846,11 +846,11 @@ export const Contabilita: React.FC = () => {
  <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-900">
 {formatCurrency(fattura.bolli)}
           </td>
-          <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 dark:text-red-400">
-{formatCurrency(fattura.tasse)}
-          </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 dark:text-blue-400">
 {formatCurrency(fattura.fatturato)}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600 dark:text-red-400">
+{formatCurrency(fattura.tasse)}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600 dark:text-green-400">
             {formatCurrency(fattura.guadagno_netto)}
@@ -858,7 +858,7 @@ export const Contabilita: React.FC = () => {
  </tr>
 {/* Riga totali mensili */}
           {isLastInMonth && (
-            <tr className="bg-signal-50 border-t border-ink-300">
+             <tr className="bg-ink-100 border-t border-ink-300">
               <td className="px-6 py-3 text-sm font-bold text-ink-900" colSpan={2}>
                 Totale {fattura.mese_fattura} {fattura.anno_fattura}
               </td>
@@ -878,10 +878,10 @@ export const Contabilita: React.FC = () => {
                 {formatCurrency(mTotals.bolli)}
               </td>
               <td className="px-6 py-3 text-sm font-bold text-ink-900">
-                {formatCurrency(mTotals.tasse)}
+                {formatCurrency(mTotals.fatturato)}
               </td>
               <td className="px-6 py-3 text-sm font-bold text-ink-900">
-                {formatCurrency(mTotals.fatturato)}
+                {formatCurrency(mTotals.tasse)}
               </td>
               <td className="px-6 py-3 text-sm font-bold text-ink-900">
                 {formatCurrency(mTotals.guadagnoNetto)}
@@ -897,7 +897,7 @@ export const Contabilita: React.FC = () => {
  </tbody>
  {/* Totalizzatore */}
  {fatture.length > 0 && (
- <tfoot className="bg-ink-100 border-t-2 border-ink-300">
+  <tfoot className="bg-ink-200 border-t-2 border-ink-300">
  <tr>
  <td className="px-6 py-4 text-sm font-bold text-ink-900">
  TOTALI
@@ -916,12 +916,12 @@ export const Contabilita: React.FC = () => {
  <td className="px-6 py-4 text-sm font-bold text-ink-900">
  {formatCurrency(totals.bolli)}
  </td>
-<td className="px-6 py-4 text-sm font-bold text-red-700 dark:text-red-400">
-              {formatCurrency(totals.tasse)}
- </td>
 <td className="px-6 py-4 text-sm font-bold text-blue-700 dark:text-blue-400">
               {formatCurrency(totals.fatturato)}
- </td>
+  </td>
+<td className="px-6 py-4 text-sm font-bold text-red-700 dark:text-red-400">
+              {formatCurrency(totals.tasse)}
+  </td>
 <td className="px-6 py-4 text-sm font-bold text-green-700 dark:text-green-400">
               {formatCurrency(totals.guadagnoNetto)}
  </td>

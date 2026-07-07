@@ -59,6 +59,7 @@ export interface TipoIncarico {
 export interface TipoPratica {
   id: number;
   descrizione: string;
+  blocco_fine_lavori?: number;
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +107,7 @@ export interface Ape {
   registrazione?: number;
   progressivo?: string;
   pagamento: boolean;
+  omaggio: boolean;
   created_at: string;
   updated_at: string;
   // Joined fields

@@ -16,35 +16,35 @@ const TriStateFilter = ({ value, onChange }: {
     <button
       onClick={() => onChange('all')}
       title="Tutti"
-      className={`p-1 rounded transition-all ${
+      className={`p-1 rounded-md transition-all duration-150 ${
         value === 'all'
-          ? 'bg-gray-200 shadow-sm'
-          : 'hover:bg-gray-100 opacity-50 hover:opacity-100'
+          ? 'bg-ink-200 shadow-sm'
+          : 'hover:bg-ink-100 opacity-50 hover:opacity-100'
       }`}
     >
-      <div className="w-2.5 h-0.5 bg-gray-400 rounded" />
+      <div className="w-2.5 h-0.5 bg-ink-400 rounded" />
     </button>
     <button
       onClick={() => onChange('yes')}
       title="Si"
-      className={`p-1 rounded transition-all ${
+      className={`p-1 rounded-md transition-all duration-150 ${
         value === 'yes'
-          ? 'bg-gray-200 shadow-sm'
-          : 'hover:bg-gray-100 opacity-50 hover:opacity-100'
+          ? 'bg-ink-200 shadow-sm'
+          : 'hover:bg-ink-100 opacity-50 hover:opacity-100'
       }`}
     >
-      <Check className="w-3 h-3 text-green-600" />
+      <Check className="w-3 h-3 text-topo-500" />
     </button>
     <button
       onClick={() => onChange('no')}
       title="No"
-      className={`p-1 rounded transition-all ${
+      className={`p-1 rounded-md transition-all duration-150 ${
         value === 'no'
-          ? 'bg-gray-200 shadow-sm'
-          : 'hover:bg-gray-100 opacity-50 hover:opacity-100'
+          ? 'bg-ink-200 shadow-sm'
+          : 'hover:bg-ink-100 opacity-50 hover:opacity-100'
       }`}
     >
-      <X className="w-3 h-3 text-red-600" />
+      <X className="w-3 h-3 text-error-500" />
     </button>
   </div>
 );
@@ -79,7 +79,8 @@ const [columnFilters, setColumnFilters] = useState<{
   });
   const [filtriAttivi, setFiltriAttivi] = useState<Record<string, boolean>>({});
   const [presetFilters, setPresetFilters] = useState({
-    nonPagate: false
+    nonPagate: false,
+    omaggio: false
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(() => {
@@ -240,6 +241,10 @@ const [columnFilters, setColumnFilters] = useState<{
         countQuery = countQuery.eq('saldo', false);
       }
 
+      if (currentPresetFilters.omaggio) {
+        countQuery = countQuery.eq('omaggio', true);
+      }
+
       if (currentPresetFilters.nonPagate) {
         const { data: statiNonPagata } = await supabase
           .from('stati_generali')
@@ -290,6 +295,10 @@ const [columnFilters, setColumnFilters] = useState<{
         query = query.eq('saldo', true);
       } else if (currentFilters.saldo === 'no') {
         query = query.eq('saldo', false);
+      }
+
+      if (currentPresetFilters.omaggio) {
+        query = query.eq('omaggio', true);
       }
 
       if (currentPresetFilters.nonPagate) {
@@ -499,7 +508,7 @@ const [columnFilters, setColumnFilters] = useState<{
       stato: '', tipo_incarico: '', committente: '', proprieta: '', indirizzo: '', citta: '', note: '',
       acconto: 'all', saldo: 'all'
     };
-    const defaultPresetFilters = { nonPagate: false };
+    const defaultPresetFilters = { nonPagate: false, omaggio: false };
     setColumnFilters(defaultFilters);
     setPresetFilters(defaultPresetFilters);
     setCurrentPage(1);
@@ -898,8 +907,8 @@ const [columnFilters, setColumnFilters] = useState<{
   };
 
   const getStatoStyle = (stato: StatoGenerale | undefined) => {
-    if (!stato || !stato.colore) return 'bg-gray-100 text-gray-800';
-    return `text-white`;
+    if (!stato || !stato.colore) return 'bg-ink-100 text-ink-800';
+    return 'text-white';
   };
 
   const getStatoBackgroundColor = (stato: StatoGenerale | undefined) => {
@@ -910,17 +919,17 @@ const [columnFilters, setColumnFilters] = useState<{
   const renderToggleButton = (value: boolean, enabled: boolean = true) => {
     return (
       <div
-        className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 ${enabled ? 'hover:scale-110' : ''
+        className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150 ${enabled ? 'hover:scale-105' : ''
           } ${value
-            ? 'bg-green-100 hover:bg-green-200'
-            : 'bg-gray-100 hover:bg-gray-200'
-          } ${!enabled ? 'opacity-30 cursor-not-allowed border-2 border-dashed border-gray-300' : ''
+            ? 'bg-topo-100 hover:bg-topo-200'
+            : 'bg-ink-100 hover:bg-ink-200'
+          } ${!enabled ? 'opacity-70 cursor-not-allowed border-2 border-dashed border-ink-300' : ''
           }`}
       >
         {value ? (
-          <Check className="w-4 h-4 text-green-600" />
+          <Check className="w-4 h-4 text-topo-600" />
         ) : (
-          <X className="w-4 h-4 text-gray-400" />
+          <X className="w-4 h-4 text-ink-400" />
         )}
       </div>
     );
@@ -932,15 +941,15 @@ const [columnFilters, setColumnFilters] = useState<{
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Varie</h1>
-            <p className="text-gray-600">Gestione pratiche varie</p>
+            <h1 className="text-2xl font-display font-bold text-ink-700">Varie</h1>
+            <p className="text-ink-500">Gestione pratiche varie</p>
             {realtimeConnected && (
               <div className="flex items-center gap-2 mt-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-xs text-green-600">
+                <div className="w-2 h-2 bg-topo-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-topo-600">
                   Aggiornamenti in tempo reale attivi
                   {lastUpdateTime && (
-                    <span className="ml-1 text-gray-400">
+                    <span className="ml-1 text-ink-400">
                       (ultimo: {lastUpdateTime.toLocaleTimeString('it-IT')})
                     </span>
                   )}
@@ -953,11 +962,11 @@ const [columnFilters, setColumnFilters] = useState<{
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-ink-600 bg-ink-100 rounded-md hover:bg-ink-200 transition-colors"
               >
                 <X className="w-4 h-4" />
                 Reset filtri
-                <span className="bg-blue-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                <span className="bg-signal-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                   {activeFilterCount}
                 </span>
               </button>
@@ -978,7 +987,7 @@ const [columnFilters, setColumnFilters] = useState<{
         <label className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all duration-150 ${
           presetFilters.nonPagate
             ? 'bg-red-500 text-white shadow-md'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
         }`}>
           <input
             type="checkbox"
@@ -988,32 +997,45 @@ const [columnFilters, setColumnFilters] = useState<{
           />
           Non pagate
         </label>
+        <label className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all duration-150 ${
+          presetFilters.omaggio
+            ? 'bg-warning-500 text-white shadow-md'
+            : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+        }`}>
+          <input
+            type="checkbox"
+            checked={presetFilters.omaggio}
+            onChange={() => handlePresetFilterToggle('omaggio')}
+            className="sr-only"
+          />
+          Omaggio
+        </label>
       </div>
 
       {/* Tabella */}
-      <div className="card p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
+      <div className="card card-flush p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
         <div className="overflow-x-auto h-full overflow-y-auto">
           <table className="w-full" style={{ minHeight: '400px' }}>
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="table-header">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Committente</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proprietario</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo Incarico</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Indirizzo</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Città</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Note</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acconto</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo</th>
+                <th className="table-cell text-left">Stato</th>
+                <th className="table-cell text-left">Committente</th>
+                <th className="table-cell text-left">Proprietario</th>
+                <th className="table-cell text-left">Tipo Incarico</th>
+                <th className="table-cell text-left">Città</th>
+                <th className="table-cell text-left">Indirizzo</th>
+                <th className="table-cell text-left">Note</th>
+                <th className="table-cell text-center">Acconto</th>
+                <th className="table-cell text-center">Saldo</th>
               </tr>
               {/* Riga filtri inline */}
-              <tr className="bg-gray-100 border-b border-gray-200">
+              <tr className="bg-ink-100 border-b border-ink-200">
                 <td className="px-2 py-1.5">
                   <div className="relative">
                     <select
                       value={columnFilters.stato}
                       onChange={(e) => handleApplyFilter({ stato: e.target.value })}
-                      className="w-full text-xs px-2 py-1.5 border border-gray-300 rounded bg-white text-gray-900 appearance-none pr-6 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2 py-1.5 border border-ink-300 rounded-md bg-white text-ink-700 appearance-none pr-6 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                     >
                       <option value="" className="bg-white">Tutti</option>
                       {stati.map((stato) => (
@@ -1022,7 +1044,7 @@ const [columnFilters, setColumnFilters] = useState<{
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-1.5 top-1/2 transform -translate-y-1/2 w-3 h-3 text-ink-400 pointer-events-none" />
                   </div>
                 </td>
                 <td className="px-2 py-1.5">
@@ -1038,12 +1060,12 @@ const [columnFilters, setColumnFilters] = useState<{
                         }
                       }}
                       placeholder="Cerca..."
-                      className="w-full text-xs px-2 py-1.5 pr-7 border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                     />
                     <button
                       type="button"
                       onClick={() => handleApplyFilter({ committente: columnFilters.committente })}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                       title="Cerca"
                     >
                       <Search className="w-3 h-3" />
@@ -1063,12 +1085,12 @@ const [columnFilters, setColumnFilters] = useState<{
                         }
                       }}
                       placeholder="Cerca..."
-                      className="w-full text-xs px-2 py-1.5 pr-7 border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                     />
                     <button
                       type="button"
                       onClick={() => handleApplyFilter({ proprieta: columnFilters.proprieta })}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                       title="Cerca"
                     >
                       <Search className="w-3 h-3" />
@@ -1088,37 +1110,12 @@ const [columnFilters, setColumnFilters] = useState<{
                         }
                       }}
                       placeholder="Cerca..."
-                      className="w-full text-xs px-2 py-1.5 pr-7 border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                     />
                     <button
                       type="button"
                       onClick={() => handleApplyFilter({ tipo_incarico: columnFilters.tipo_incarico })}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
-                      title="Cerca"
-                    >
-                      <Search className="w-3 h-3" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-2 py-1.5">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={columnFilters.indirizzo}
-                      onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          (e.target as HTMLInputElement).blur();
-                          handleApplyFilter({ indirizzo: (e.target as HTMLInputElement).value });
-                        }
-                      }}
-                      placeholder="Cerca..."
-                      className="w-full text-xs px-2 py-1.5 pr-7 border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleApplyFilter({ indirizzo: columnFilters.indirizzo })}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                       title="Cerca"
                     >
                       <Search className="w-3 h-3" />
@@ -1138,12 +1135,37 @@ const [columnFilters, setColumnFilters] = useState<{
                         }
                       }}
                       placeholder="Cerca..."
-                      className="w-full text-xs px-2 py-1.5 pr-7 border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                     />
                     <button
                       type="button"
                       onClick={() => handleApplyFilter({ citta: columnFilters.citta })}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
+                      title="Cerca"
+                    >
+                      <Search className="w-3 h-3" />
+                    </button>
+                  </div>
+                </td>
+                <td className="px-2 py-1.5">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={columnFilters.indirizzo}
+                      onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                          handleApplyFilter({ indirizzo: (e.target as HTMLInputElement).value });
+                        }
+                      }}
+                      placeholder="Cerca..."
+                      className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleApplyFilter({ indirizzo: columnFilters.indirizzo })}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                       title="Cerca"
                     >
                       <Search className="w-3 h-3" />
@@ -1163,12 +1185,12 @@ const [columnFilters, setColumnFilters] = useState<{
                         }
                       }}
                       placeholder="Cerca..."
-                      className="w-full text-xs px-2 py-1.5 pr-7 border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                     />
                     <button
                       type="button"
                       onClick={() => handleApplyFilter({ note: columnFilters.note })}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                       title="Cerca"
                     >
                       <Search className="w-3 h-3" />
@@ -1189,12 +1211,12 @@ const [columnFilters, setColumnFilters] = useState<{
                 </td>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-ink-100">
               {loading || authLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-8 text-center text-ink-500">
                     <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-signal-500"></div>
                       <span className="ml-2">
                         {authLoading ? 'Verifica autenticazione...' : 'Caricamento...'}
                       </span>
@@ -1203,14 +1225,14 @@ const [columnFilters, setColumnFilters] = useState<{
                 </tr>
               ) : varie.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-8 text-center text-ink-500">
                     Nessuna varia trovata
                   </td>
                 </tr>
               ) : (
                 varie.map((varia) => (
-                  <tr key={varia.id} className="hover:bg-gray-50" onContextMenu={(e) => handleContextMenu(e, varia)}>
-                    <td className="px-4 py-3">
+                  <tr key={varia.id} className="table-row hover:bg-ink-50" onContextMenu={(e) => handleContextMenu(e, varia)}>
+                    <td className="table-cell">
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(varia.registrazione_info)}`}
                         style={{ backgroundColor: getStatoBackgroundColor(varia.registrazione_info) }}
@@ -1218,13 +1240,13 @@ const [columnFilters, setColumnFilters] = useState<{
                         {varia.registrazione_info?.descrizione || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{varia.committente}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{combineProprieta(varia.proprieta, varia.proprieta2)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{varia.tipo_incarico || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{varia.indirizzo || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{varia.citta || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{varia.note || '-'}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="table-cell font-medium text-ink-700">{varia.committente}</td>
+                    <td className="table-cell text-ink-600">{combineProprieta(varia.proprieta, varia.proprieta2)}</td>
+                    <td className="table-cell text-ink-600">{varia.tipo_incarico || '-'}</td>
+                    <td className="table-cell text-ink-600 max-w-xs truncate">{varia.citta || '-'}</td>
+                    <td className="table-cell text-ink-600 max-w-xs truncate">{varia.indirizzo || '-'}</td>
+                    <td className="table-cell text-ink-600 max-w-xs truncate">{varia.note || '-'}</td>
+                    <td className="table-cell text-center">
                       <button
                         type="button"
                         onClick={() => handleToggleField(varia, 'acconto')}
@@ -1253,15 +1275,15 @@ const [columnFilters, setColumnFilters] = useState<{
 
         {/* Controlli Paginazione */}
         {varie.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="px-6 py-4 border-t border-ink-200 bg-ink-50">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-ink-500">
                 Mostrando {Math.min((currentPage - 1) * recordsPerPage + 1, totalRecords)} - {Math.min(currentPage * recordsPerPage, totalRecords)} di {totalRecords} varie
               </div>
 
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-500">Record:</span>
+                  <span className="text-sm text-ink-500">Record:</span>
                   <select
                     value={recordsPerPage}
                     onChange={(e) => handleRecordsPerPageChange(parseInt(e.target.value))}
@@ -1279,7 +1301,7 @@ const [columnFilters, setColumnFilters] = useState<{
                     <button
                       onClick={() => handlePageChange(1)}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                     >
                       ««
                     </button>
@@ -1287,7 +1309,7 @@ const [columnFilters, setColumnFilters] = useState<{
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                     >
                       ‹
                     </button>
@@ -1308,9 +1330,9 @@ const [columnFilters, setColumnFilters] = useState<{
                         <button
                           key={pageNum}
                           onClick={() => handlePageChange(pageNum)}
-                          className={`px-3 py-1 text-sm border rounded ${currentPage === pageNum
-                              ? 'bg-blue-500 text-white border-blue-500'
-                              : 'border-gray-300 hover:bg-gray-100'
+                          className={`px-3 py-1 text-sm border rounded-md ${currentPage === pageNum
+                              ? 'bg-signal-500 text-white border-signal-500'
+                              : 'border-ink-300 hover:bg-ink-100 text-ink-600'
                             }`}
                         >
                           {pageNum}
@@ -1321,7 +1343,7 @@ const [columnFilters, setColumnFilters] = useState<{
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === getTotalPages()}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                     >
                       ›
                     </button>
@@ -1329,7 +1351,7 @@ const [columnFilters, setColumnFilters] = useState<{
                     <button
                       onClick={() => handlePageChange(getTotalPages())}
                       disabled={currentPage === getTotalPages()}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                     >
                       »»
                     </button>
@@ -1338,7 +1360,7 @@ const [columnFilters, setColumnFilters] = useState<{
               </div>
 
               {getTotalPages() > 1 && (
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-ink-500">
                   Pagina {currentPage} di {getTotalPages()}
                 </div>
               )}

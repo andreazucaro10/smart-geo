@@ -16,7 +16,7 @@ const TriStateFilter = ({ value, onChange }: {
     <button
       onClick={() => onChange('all')}
       title="Tutti"
-      className={`p-1 rounded transition-all ${
+      className={`p-1 rounded-md transition-all duration-150 ${
         value === 'all'
           ? 'bg-ink-200 shadow-sm'
           : 'hover:bg-ink-100 opacity-50 hover:opacity-100'
@@ -27,18 +27,18 @@ const TriStateFilter = ({ value, onChange }: {
     <button
       onClick={() => onChange('yes')}
       title="Si"
-      className={`p-1 rounded transition-all ${
+      className={`p-1 rounded-md transition-all duration-150 ${
         value === 'yes'
           ? 'bg-ink-200 shadow-sm'
           : 'hover:bg-ink-100 opacity-50 hover:opacity-100'
       }`}
     >
-      <Check className="w-3 h-3 text-topo-600" />
+      <Check className="w-3 h-3 text-topo-500" />
     </button>
     <button
       onClick={() => onChange('no')}
       title="No"
-      className={`p-1 rounded transition-all ${
+      className={`p-1 rounded-md transition-all duration-150 ${
         value === 'no'
           ? 'bg-ink-200 shadow-sm'
           : 'hover:bg-ink-100 opacity-50 hover:opacity-100'
@@ -62,6 +62,7 @@ interface ApeFormData {
   registrazione: number | null;
   progressivo: string;
   pagamento: boolean;
+  omaggio: boolean;
   created_at: string;
 }
 
@@ -95,6 +96,9 @@ export const ApePage: React.FC = () => {
   const [filtriAttivi, setFiltriAttivi] = useState({
     soloNonPagate: false
   });
+  const [presetFilters, setPresetFilters] = useState({
+    omaggio: false
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(() => {
     const saved = localStorage.getItem('ape-records-per-page');
@@ -126,6 +130,7 @@ export const ApePage: React.FC = () => {
     registrazione: null,
     progressivo: '',
     pagamento: false,
+    omaggio: false,
     created_at: new Date().toISOString().split('T')[0] // Default to today's date
   });
   const [submitting, setSubmitting] = useState(false);
@@ -134,7 +139,7 @@ export const ApePage: React.FC = () => {
   const activeFilterCount = Object.entries(columnFilters).filter(([key, val]) => {
     if (key === 'pagamento') return val !== 'all';
     return val !== '';
-  }).length;
+  }).length + Object.values(presetFilters).filter(Boolean).length;
 
   // Protezione contro errori delle estensioni del browser
   useEffect(() => {
@@ -203,6 +208,7 @@ export const ApePage: React.FC = () => {
       registrazione: null,
       progressivo: '',
       pagamento: false,
+      omaggio: false,
       created_at: new Date().toISOString().split('T')[0]
     });
     setEditingPratica(null);
@@ -227,6 +233,7 @@ export const ApePage: React.FC = () => {
       registrazione: pratica.registrazione || null,
       progressivo: pratica.progressivo || '',
       pagamento: pratica.pagamento || false,
+      omaggio: pratica.omaggio || false,
       created_at: pratica.created_at ? new Date(pratica.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
     });
     setEditingPratica(pratica);
@@ -425,6 +432,7 @@ export const ApePage: React.FC = () => {
         registrazione: formData.registrazione || null,
         progressivo: progressivoFinale || null,
         pagamento: formData.pagamento,
+        omaggio: formData.omaggio,
         created_at: formData.created_at,
         user_id: user?.id
       };
@@ -507,6 +515,7 @@ export const ApePage: React.FC = () => {
   const fetchData = async (customFilters?: {
     columnFilters?: typeof columnFilters;
     filtriAttivi?: typeof filtriAttivi;
+    presetFilters?: typeof presetFilters;
     page?: number;
     perPage?: number;
   }) => {
@@ -521,6 +530,7 @@ export const ApePage: React.FC = () => {
       
       const currentFilters = customFilters?.columnFilters ?? columnFilters;
       const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
+      const currentPresetFilters = customFilters?.presetFilters ?? presetFilters;
       const currentPageParam = customFilters?.page ?? currentPage;
       const currentPerPage = customFilters?.perPage ?? recordsPerPage;
       
@@ -563,6 +573,10 @@ export const ApePage: React.FC = () => {
         countQuery = countQuery.eq('pagamento', false);
       }
 
+      if (currentPresetFilters.omaggio) {
+        countQuery = countQuery.eq('omaggio', true);
+      }
+
       let statiFiltroNonPagata: number[] = [];
       if (currentFiltriAttivi.soloNonPagate) {
         const { data: statiNonPagata } = await supabase
@@ -599,8 +613,8 @@ export const ApePage: React.FC = () => {
         `)
         .eq('user_id', user?.id)
         .order('registrazione', { ascending: true })
-        .order('created_at', { ascending: false })
-        .order('progressivo', { ascending: false, nullsFirst: true });
+        .order('progressivo', { ascending: false, nullsFirst: true })
+        .order('created_at', { ascending: false });
 
       if (searchParts.length > 0) {
         query = query.or(searchParts.join(','));
@@ -614,6 +628,10 @@ export const ApePage: React.FC = () => {
         query = query.eq('pagamento', true);
       } else if (currentFilters.pagamento === 'no') {
         query = query.eq('pagamento', false);
+      }
+
+      if (currentPresetFilters.omaggio) {
+        query = query.eq('omaggio', true);
       }
 
       if (currentFiltriAttivi.soloNonPagate) {
@@ -656,12 +674,12 @@ export const ApePage: React.FC = () => {
         const ordinamentoB = b.registrazione_info?.ordinamento ?? Infinity;
         if (ordinamentoA !== ordinamentoB) return ordinamentoA - ordinamentoB;
 
-        const createdCompare = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        if (createdCompare !== 0) return createdCompare;
-
         const progressivoA = a.progressivo || '';
         const progressivoB = b.progressivo || '';
-        return progressivoB.localeCompare(progressivoA, undefined, { numeric: true, sensitivity: 'base' });
+        const progressivoCompare = progressivoB.localeCompare(progressivoA, undefined, { numeric: true, sensitivity: 'base' });
+        if (progressivoCompare !== 0) return progressivoCompare;
+
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
       setPratiche(sortedData);
@@ -814,13 +832,25 @@ export const ApePage: React.FC = () => {
     fetchData({ columnFilters: newFilters, page: 1 });
   };
 
+  const handlePresetFilterToggle = (filterName: keyof typeof presetFilters) => {
+    const newPresetFilters = {
+      ...presetFilters,
+      [filterName]: !presetFilters[filterName]
+    };
+    setPresetFilters(newPresetFilters);
+    setCurrentPage(1);
+    fetchData({ columnFilters, presetFilters: newPresetFilters, page: 1 });
+  };
+
   const handleResetFilters = () => {
     const defaultFilters: typeof columnFilters = {
       stato: '', committente: '', proprieta: '', indirizzo: '', citta: '', note: '', progressivo: '', pagamento: 'all'
     };
+    const defaultPresetFilters = { omaggio: false };
     setColumnFilters(defaultFilters);
+    setPresetFilters(defaultPresetFilters);
     setCurrentPage(1);
-    fetchData({ columnFilters: defaultFilters, page: 1 });
+    fetchData({ columnFilters: defaultFilters, presetFilters: defaultPresetFilters, page: 1 });
   };
 
   const handleFilterToggle = (filterName: keyof typeof filtriAttivi) => {
@@ -976,6 +1006,38 @@ export const ApePage: React.FC = () => {
     }
   };
 
+  const handleToggleOmaggio = async (pratica: Ape) => {
+    try {
+      const nuovoOmaggio = !pratica.omaggio;
+
+      const { error } = await supabase
+        .from('ape')
+        .update({
+          omaggio: nuovoOmaggio,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', pratica.id)
+        .eq('user_id', user?.id);
+
+      if (error) {
+        console.error('Errore aggiornamento omaggio:', error);
+        toast.error("Errore nell'aggiornamento dell'omaggio");
+        return;
+      }
+
+      setPratiche(prev =>
+        prev.map(p =>
+          p.id === pratica.id ? { ...p, omaggio: nuovoOmaggio } : p
+        )
+      );
+
+      toast.success(nuovoOmaggio ? 'Omaggio marcato come consegnato' : 'Omaggio marcato come non consegnato');
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error("Errore nell'aggiornamento");
+    }
+  };
+
   const handleDeletePratica = async (id: number) => {
     if (!confirm('Sei sicuro di voler eliminare questa pratica APE?')) {
       return;
@@ -1021,7 +1083,7 @@ export const ApePage: React.FC = () => {
   const renderToggleButton = (value: boolean) => {
     return (
       <div
-        className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 hover:scale-110 ${
+        className={`relative inline-flex items-center justify-center w-8 h-8 rounded-full transition-all duration-150 hover:scale-105 ${
           value
             ? 'bg-topo-100 hover:bg-topo-200'
             : 'bg-ink-100 hover:bg-ink-200'
@@ -1046,15 +1108,15 @@ export const ApePage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-ink-900">Gestione APE</h1>
-            <p className="text-ink-600">Gestione pratiche APE</p>
+            <h1 className="text-2xl font-display font-bold text-ink-700">Gestione APE</h1>
+            <p className="text-ink-500">Gestione pratiche APE</p>
             {realtimeConnected && (
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-2 h-2 bg-topo-500 rounded-full animate-pulse"></div>
                 <span className="text-xs text-topo-600">
                   Aggiornamenti in tempo reale attivi
                   {lastUpdateTime && (
-                    <span className="ml-1 text-ink-500">
+                    <span className="ml-1 text-ink-400">
                       (ultimo: {lastUpdateTime.toLocaleTimeString('it-IT')})
                     </span>
                   )}
@@ -1066,7 +1128,7 @@ export const ApePage: React.FC = () => {
             {activeFilterCount > 0 && (
               <button
                 onClick={handleResetFilters}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-ink-600 bg-ink-100 rounded-lg hover:bg-ink-200 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-ink-600 bg-ink-100 rounded-md hover:bg-ink-200 transition-colors"
               >
                 <X className="w-4 h-4" />
                 Reset filtri
@@ -1102,10 +1164,10 @@ export const ApePage: React.FC = () => {
 
         {/* Filtri preimpostati */}
         <div className="flex flex-wrap gap-3">
-          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200 ${
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all duration-150 ${
             filtriAttivi.soloNonPagate
               ? 'bg-signal-500 text-white shadow-md'
-              : 'bg-ink-100 text-ink-700 hover:bg-ink-200'
+              : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
           }`}>
             <input
               type="checkbox"
@@ -1115,52 +1177,64 @@ export const ApePage: React.FC = () => {
             />
             Non pagate
           </label>
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all duration-150 ${
+            presetFilters.omaggio
+              ? 'bg-warning-500 text-white shadow-md'
+              : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+          }`}>
+            <input
+              type="checkbox"
+              checked={presetFilters.omaggio}
+              onChange={() => handlePresetFilterToggle('omaggio')}
+              className="sr-only"
+            />
+            Omaggio
+          </label>
         </div>
 
       {/* Contenuto principale */}
       {loading ? (
-        <div className="card p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
+        <div className="card card-flush p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-signal-500"></div>
             <span className="ml-2 text-ink-500">Caricamento...</span>
           </div>
         </div>
       ) : pratiche.length === 0 ? (
-        <div className="card p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
+        <div className="card card-flush p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
           <div className="bg-warning-50 border border-warning-500/20 rounded-lg p-4">
             <p className="text-warning-600 text-center">Nessuna pratica APE trovata.</p>
           </div>
         </div>
       ) : (
         /* Tabella */
-        <div className="card p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
+        <div className="card card-flush p-0 flex-1" style={{ height: 'calc(100vh - 300px)', overflow: 'hidden' }}>
           <div className="overflow-x-auto h-full overflow-y-auto">
             <table className="w-full" style={{ minHeight: '400px' }}>
-              <thead className="bg-ink-50 border-b border-ink-200">
+              <thead className="table-header">
                 <tr>
-
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-left">
                     Stato
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-left">
                     Committente
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-left">
                     Proprietà
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
-                    Indirizzo
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-left">
                     Città
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-left">
+                    Indirizzo
+                  </th>
+                  <th className="table-cell text-left">
                     Note
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-left">
                     Progressivo
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-ink-500 uppercase tracking-wider">
+                  <th className="table-cell text-center">
                     Pagamento
                   </th>
                 </tr>
@@ -1171,7 +1245,7 @@ export const ApePage: React.FC = () => {
                       <select
                         value={columnFilters.stato}
                         onChange={(e) => handleApplyFilter({ stato: e.target.value })}
-                        className="w-full text-xs px-2 py-1.5 border border-ink-300 rounded bg-white text-ink-900 appearance-none pr-6 focus:outline-none focus:ring-1 focus:ring-signal-500"
+                        className="w-full text-xs px-2 py-1.5 border border-ink-300 rounded-md bg-white text-ink-700 appearance-none pr-6 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                       >
                         <option value="" className="bg-white">Tutti</option>
                         {stati.map((stato) => (
@@ -1196,7 +1270,7 @@ export const ApePage: React.FC = () => {
                           }
                         }}
                         placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded bg-white text-ink-900 placeholder-ink-400 focus:outline-none focus:ring-1 focus:ring-signal-500"
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                       />
                       <button
                         onClick={() => handleApplyFilter({ committente: columnFilters.committente })}
@@ -1220,34 +1294,10 @@ export const ApePage: React.FC = () => {
                           }
                         }}
                         placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded bg-white text-ink-900 placeholder-ink-400 focus:outline-none focus:ring-1 focus:ring-signal-500"
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                       />
                       <button
                         onClick={() => handleApplyFilter({ proprieta: columnFilters.proprieta })}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
-                        title="Cerca"
-                      >
-                        <Search className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={columnFilters.indirizzo}
-                        onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            (e.target as HTMLInputElement).blur();
-                            handleApplyFilter({ indirizzo: (e.target as HTMLInputElement).value });
-                          }
-                        }}
-                        placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded bg-white text-ink-900 placeholder-ink-400 focus:outline-none focus:ring-1 focus:ring-signal-500"
-                      />
-                      <button
-                        onClick={() => handleApplyFilter({ indirizzo: columnFilters.indirizzo })}
                         className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                         title="Cerca"
                       >
@@ -1268,10 +1318,34 @@ export const ApePage: React.FC = () => {
                           }
                         }}
                         placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded bg-white text-ink-900 placeholder-ink-400 focus:outline-none focus:ring-1 focus:ring-signal-500"
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                       />
                       <button
                         onClick={() => handleApplyFilter({ citta: columnFilters.citta })}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
+                        title="Cerca"
+                      >
+                        <Search className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={columnFilters.indirizzo}
+                        onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            (e.target as HTMLInputElement).blur();
+                            handleApplyFilter({ indirizzo: (e.target as HTMLInputElement).value });
+                          }
+                        }}
+                        placeholder="Cerca..."
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
+                      />
+                      <button
+                        onClick={() => handleApplyFilter({ indirizzo: columnFilters.indirizzo })}
                         className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                         title="Cerca"
                       >
@@ -1292,7 +1366,7 @@ export const ApePage: React.FC = () => {
                           }
                         }}
                         placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded bg-white text-ink-900 placeholder-ink-400 focus:outline-none focus:ring-1 focus:ring-signal-500"
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                       />
                       <button
                         onClick={() => handleApplyFilter({ note: columnFilters.note })}
@@ -1316,7 +1390,7 @@ export const ApePage: React.FC = () => {
                           }
                         }}
                         placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded bg-white text-ink-900 placeholder-ink-400 focus:outline-none focus:ring-1 focus:ring-signal-500"
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
                       />
                       <button
                         onClick={() => handleApplyFilter({ progressivo: columnFilters.progressivo })}
@@ -1335,7 +1409,7 @@ export const ApePage: React.FC = () => {
                   </td>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-ink-200">
+              <tbody className="bg-white divide-y divide-ink-100">
                 {(() => {
                   let currentYear: string | null = null;
                   return pratiche.flatMap((pratica) => {
@@ -1345,15 +1419,15 @@ export const ApePage: React.FC = () => {
                       currentYear = year;
                       rows.push(
                         <tr key={`year-${year}`} className="bg-ink-100">
-                          <td colSpan={8} className="px-4 py-2 text-sm font-bold text-ink-700">
+                          <td colSpan={9} className="px-4 py-2 text-sm font-bold text-ink-700">
                             {year}
                           </td>
                         </tr>
                       );
                     }
                     rows.push(
-                      <tr key={pratica.id} className="hover:bg-ink-50" onContextMenu={(e) => handleContextMenu(e, pratica)}>
-                        <td className="px-4 py-3">
+                      <tr key={pratica.id} className="table-row hover:bg-ink-50" onContextMenu={(e) => handleContextMenu(e, pratica)}>
+                        <td className="table-cell">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-semibold rounded ${getStatoStyle(pratica.registrazione_info)}`}
                             style={{ backgroundColor: getStatoBackgroundColor(pratica.registrazione_info) }}
@@ -1361,25 +1435,25 @@ export const ApePage: React.FC = () => {
                             {pratica.registrazione_info?.descrizione || 'N/A'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm font-medium text-ink-900">
+                        <td className="table-cell font-medium text-ink-700">
                           {pratica.committente}
                         </td>
-                         <td className="px-4 py-3 text-sm text-ink-900">
+                         <td className="table-cell text-ink-600">
                            {combineProprieta(pratica.proprieta, pratica.proprieta2)}
                          </td>
-                         <td className="px-4 py-3 text-sm text-ink-900">
-                           {pratica.indirizzo || '-'}
-                         </td>
-                         <td className="px-4 py-3 text-sm text-ink-900">
-                           {pratica.citta || '-'}
-                         </td>
-                         <td className="px-4 py-3 text-sm text-ink-900 max-w-xs truncate">
+                         <td className="table-cell text-ink-600 max-w-xs truncate">
+                            {pratica.citta || '-'}
+                          </td>
+                          <td className="table-cell text-ink-600 max-w-xs truncate">
+                            {pratica.indirizzo || '-'}
+                          </td>
+                         <td className="table-cell text-ink-600 max-w-xs truncate">
                           {pratica.note || '-'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-ink-900">
+                        <td className="table-cell text-ink-600">
                           {pratica.progressivo || '-'}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="table-cell text-center">
                           <button
                             onClick={() => handleTogglePagamento(pratica)}
                             className="transition-colors cursor-pointer"
@@ -1430,7 +1504,7 @@ export const ApePage: React.FC = () => {
                       <button
                         onClick={() => handlePageChange(1)}
                         disabled={currentPage === 1}
-                        className="px-3 py-1 text-sm border border-ink-300 rounded hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                       >
                         ««
                       </button>
@@ -1439,7 +1513,7 @@ export const ApePage: React.FC = () => {
                       <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className="px-3 py-1 text-sm border border-ink-300 rounded hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                       >
                         ‹
                       </button>
@@ -1461,10 +1535,10 @@ export const ApePage: React.FC = () => {
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-1 text-sm border rounded ${
+                            className={`px-3 py-1 text-sm border rounded-md ${
                               currentPage === pageNum
                                 ? 'bg-signal-500 text-white border-signal-500'
-                                : 'border-ink-300 hover:bg-ink-100'
+                                : 'border-ink-300 hover:bg-ink-100 text-ink-600'
                             }`}
                           >
                             {pageNum}
@@ -1476,7 +1550,7 @@ export const ApePage: React.FC = () => {
                       <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === getTotalPages()}
-                        className="px-3 py-1 text-sm border border-ink-300 rounded hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                       >
                         ›
                       </button>
@@ -1485,7 +1559,7 @@ export const ApePage: React.FC = () => {
                       <button
                         onClick={() => handlePageChange(getTotalPages())}
                         disabled={currentPage === getTotalPages()}
-                        className="px-3 py-1 text-sm border border-ink-300 rounded hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-1 text-sm border border-ink-300 rounded-md hover:bg-ink-100 disabled:opacity-50 disabled:cursor-not-allowed text-ink-600"
                       >
                         »»
                       </button>
@@ -1604,7 +1678,7 @@ export const ApePage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="pt-4">
+                    <div className="pt-4 space-y-3">
                     <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
                       formData.pagamento
                         ? 'bg-signal-50 border-signal-500 text-signal-600 cursor-pointer'
@@ -1629,6 +1703,31 @@ export const ApePage: React.FC = () => {
                         )}
                       </div>
                       <span className="text-sm font-medium">Pagamento</span>
+                    </label>
+                    <label className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border-2 ${
+                      formData.omaggio
+                        ? 'bg-warning-50 border-warning-500 text-warning-600 cursor-pointer'
+                        : 'bg-ink-50 border-ink-200 text-ink-700 hover:bg-ink-100 cursor-pointer'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        name="omaggio"
+                        checked={formData.omaggio}
+                        onChange={handleInputChange}
+                        className="sr-only"
+                      />
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                        formData.omaggio
+                          ? 'border-warning-500 bg-warning-500'
+                          : 'border-ink-300 bg-transparent'
+                      }`}>
+                        {formData.omaggio && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium">Omaggio</span>
                     </label>
                   </div>
 

@@ -90,7 +90,8 @@ export const ComuneCatastoPage: React.FC = () => {
   });
   const [presetFilters, setPresetFilters] = useState({
     nonCompletati: false,
-    nonPagate: false
+    nonPagate: false,
+    omaggio: false
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(() => {
@@ -251,7 +252,7 @@ export const ComuneCatastoPage: React.FC = () => {
           *,
           stato_info:stati_generali(id, descrizione, colore),
           tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto),
-          tipo_pratica_info:tipi_pratica(id, descrizione)
+          tipo_pratica_info:tipi_pratica(id, descrizione, blocco_fine_lavori)
         `)
         .eq('user_id', user?.id)
         .order('stato', { ascending: true })
@@ -332,6 +333,11 @@ export const ComuneCatastoPage: React.FC = () => {
       } else if (currentFilters.saldo === 'no') {
         countQuery = countQuery.eq('saldo', false);
         query = query.eq('saldo', false);
+      }
+
+      if (currentPresetFilters.omaggio) {
+        countQuery = countQuery.eq('omaggio', true);
+        query = query.eq('omaggio', true);
       }
 
       if (currentPresetFilters.nonCompletati) {
@@ -422,7 +428,7 @@ export const ComuneCatastoPage: React.FC = () => {
                 *,
                 stato_info:stati_generali(id, descrizione, colore),
                 tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto),
-                tipo_pratica_info:tipi_pratica(id, descrizione)
+                tipo_pratica_info:tipi_pratica(id, descrizione, blocco_fine_lavori)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -445,7 +451,7 @@ export const ComuneCatastoPage: React.FC = () => {
                 *,
                 stato_info:stati_generali(id, descrizione, colore),
                 tipo_incarico_info:tipi_incarico(id, descrizione, comune, catasto),
-                tipo_pratica_info:tipi_pratica(id, descrizione)
+                tipo_pratica_info:tipi_pratica(id, descrizione, blocco_fine_lavori)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -524,7 +530,7 @@ export const ComuneCatastoPage: React.FC = () => {
       tipo_incarico: '', tipo_pratica: '',
       comune: 'all', catasto: 'all', fine_lavori: 'all', acconto: 'all', saldo: 'all'
     };
-    const defaultPresetFilters = { nonCompletati: false, nonPagate: false };
+    const defaultPresetFilters = { nonCompletati: false, nonPagate: false, omaggio: false };
     setColumnFilters(defaultFilters);
     setPresetFilters(defaultPresetFilters);
     setCurrentPage(1);
@@ -660,7 +666,7 @@ export const ComuneCatastoPage: React.FC = () => {
       tuttiIFlagCompletati = false;
     }
 
-    if (tipoIncarico.comune && !pratica.fine_lavori) {
+    if (tipoIncarico.comune && !pratica.tipo_pratica_info?.blocco_fine_lavori && !pratica.fine_lavori) {
       tuttiIFlagCompletati = false;
     }
 
@@ -684,7 +690,7 @@ export const ComuneCatastoPage: React.FC = () => {
       case 'catasto':
         return tipoIncarico?.catasto === true;
       case 'fine_lavori':
-        return pratica.comune === true;
+        return pratica.comune === true && !pratica.tipo_pratica_info?.blocco_fine_lavori;
       case 'acconto':
         return pratica.saldo !== true; // Disabilita acconto se saldo è flaggato
       case 'saldo':
@@ -872,6 +878,13 @@ export const ComuneCatastoPage: React.FC = () => {
         user_id: user?.id
       };
 
+      const tipoPraticaSelezionata = dataToSave.tipo_pratica
+        ? tipiPratica.find(t => t.id === dataToSave.tipo_pratica)
+        : null;
+      if (tipoPraticaSelezionata?.blocco_fine_lavori) {
+        dataToSave.fine_lavori = false;
+      }
+
       const tipoIncaricoSelezionato = getTipoIncaricoSelezionato();
       if (tipoIncaricoSelezionato) {
         const praticaSimulata = {
@@ -1049,7 +1062,7 @@ export const ComuneCatastoPage: React.FC = () => {
         tipo_pratica: pratica.tipo_pratica?.toString() || '',
         comune: pratica.comune,
         catasto: pratica.catasto,
-        fine_lavori: pratica.fine_lavori,
+        fine_lavori: pratica.tipo_pratica_info?.blocco_fine_lavori ? false : pratica.fine_lavori,
         acconto: pratica.acconto,
         saldo: pratica.saldo,
         omaggio: pratica.omaggio,
@@ -1116,8 +1129,14 @@ export const ComuneCatastoPage: React.FC = () => {
     return tipiIncarico.find(tipo => tipo.id === parseInt(formData.tipo_incarico));
   };
 
+  const getTipoPraticaSelezionata = () => {
+    if (!formData.tipo_pratica) return null;
+    return tipiPratica.find(tipo => tipo.id === parseInt(formData.tipo_pratica));
+  };
+
   const isFlagAbilitato = (flagName: 'comune' | 'catasto' | 'fine_lavori' | 'acconto' | 'saldo' | 'omaggio') => {
     const tipoSelezionato = getTipoIncaricoSelezionato();
+    const tipoPraticaSelezionata = getTipoPraticaSelezionata();
 
     switch (flagName) {
       case 'comune':
@@ -1125,7 +1144,7 @@ export const ComuneCatastoPage: React.FC = () => {
       case 'catasto':
         return tipoSelezionato?.catasto === true;
       case 'fine_lavori':
-        return formData.comune === true;
+        return formData.comune === true && !tipoPraticaSelezionata?.blocco_fine_lavori;
       case 'acconto':
         return formData.saldo !== true; // Disabilita acconto se saldo è flaggato
       case 'saldo':
@@ -1159,13 +1178,25 @@ export const ComuneCatastoPage: React.FC = () => {
     });
   };
 
+  const handleTipoPraticaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nuovoTipoPratica = e.target.value;
+    const tipoSelezionato = tipiPratica.find(tipo => tipo.id === parseInt(nuovoTipoPratica));
+
+    setFormData(prev => ({
+      ...prev,
+      tipo_pratica: nuovoTipoPratica,
+      fine_lavori: tipoSelezionato?.blocco_fine_lavori ? false : prev.fine_lavori
+    }));
+  };
+
   const handleComuneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nuovoComune = e.target.checked;
+    const tipoPraticaSelezionata = getTipoPraticaSelezionata();
 
     setFormData(prev => ({
       ...prev,
       comune: nuovoComune,
-      fine_lavori: nuovoComune ? prev.fine_lavori : false
+      fine_lavori: (nuovoComune && !tipoPraticaSelezionata?.blocco_fine_lavori) ? prev.fine_lavori : false
     }));
   };
 
@@ -1285,6 +1316,19 @@ export const ComuneCatastoPage: React.FC = () => {
             />
             Non pagate
           </label>
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all duration-150 ${
+            presetFilters.omaggio
+              ? 'bg-blue-500 text-white shadow-md'
+              : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
+          }`}>
+            <input
+              type="checkbox"
+              checked={presetFilters.omaggio}
+              onChange={() => handlePresetFilterToggle('omaggio')}
+              className="sr-only"
+            />
+            Omaggio
+          </label>
         </div>
 
         {/* Tabella - Container con altezza flessibile e scroll interno */}
@@ -1303,10 +1347,10 @@ export const ComuneCatastoPage: React.FC = () => {
                     Proprietà
                   </th>
                   <th className="table-cell text-left">
-                    Indirizzo
+                    Città
                   </th>
                   <th className="table-cell text-left">
-                    Città
+                    Indirizzo
                   </th>
                   <th className="table-cell text-left">
                     Note
@@ -1406,31 +1450,6 @@ export const ComuneCatastoPage: React.FC = () => {
                     <div className="relative">
                       <input
                         type="text"
-                        value={columnFilters.indirizzo}
-                        onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            (e.target as HTMLInputElement).blur();
-                            handleApplyFilter({ indirizzo: (e.target as HTMLInputElement).value });
-                          }
-                        }}
-                        placeholder="Cerca..."
-                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleApplyFilter({ indirizzo: columnFilters.indirizzo })}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
-                        title="Cerca"
-                      >
-                        <Search className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <div className="relative">
-                      <input
-                        type="text"
                         value={columnFilters.citta}
                         onChange={(e) => handleColumnFilterChange('citta', e.target.value)}
                         onKeyDown={(e) => {
@@ -1445,6 +1464,31 @@ export const ComuneCatastoPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleApplyFilter({ citta: columnFilters.citta })}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
+                        title="Cerca"
+                      >
+                        <Search className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={columnFilters.indirizzo}
+                        onChange={(e) => handleColumnFilterChange('indirizzo', e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            (e.target as HTMLInputElement).blur();
+                            handleApplyFilter({ indirizzo: (e.target as HTMLInputElement).value });
+                          }
+                        }}
+                        placeholder="Cerca..."
+                        className="w-full text-xs px-2 py-1.5 pr-7 border border-ink-300 rounded-md bg-white text-ink-700 placeholder-ink-400 focus:outline-none focus:ring-2 focus:ring-signal-500/20 focus:border-signal-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleApplyFilter({ indirizzo: columnFilters.indirizzo })}
                         className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-ink-400 hover:text-ink-600 hover:bg-ink-200 transition-colors"
                         title="Cerca"
                       >
@@ -1577,10 +1621,10 @@ export const ComuneCatastoPage: React.FC = () => {
                         {combineProprieta(pratica.proprieta, pratica.proprieta2)}
                       </td>
                       <td className="table-cell text-ink-600 max-w-xs truncate">
-                        {pratica.indirizzo || '-'}
+                        {pratica.citta || '-'}
                       </td>
                       <td className="table-cell text-ink-600 max-w-xs truncate">
-                        {pratica.citta || '-'}
+                        {pratica.indirizzo || '-'}
                       </td>
                       <td className="table-cell text-ink-600 max-w-xs truncate">
                         {pratica.note || '-'}
@@ -1636,7 +1680,9 @@ export const ComuneCatastoPage: React.FC = () => {
                           title={
                             isFlagAbilitatoInTabella(pratica, 'fine_lavori')
                               ? 'Clicca per cambiare stato'
-                              : 'Abilitato solo se Comune è attivo'
+                              : pratica.tipo_pratica_info?.blocco_fine_lavori
+                                ? 'Bloccato dal tipo pratica'
+                                : 'Abilitato solo se Comune è attivo'
                           }
                         >
                           {renderToggleButton(pratica.fine_lavori, isFlagAbilitatoInTabella(pratica, 'fine_lavori'))}
@@ -1957,7 +2003,7 @@ export const ComuneCatastoPage: React.FC = () => {
                         <select
                           name="tipo_pratica"
                           value={formData.tipo_pratica}
-                          onChange={handleInputChange}
+                          onChange={handleTipoPraticaChange}
                           className="input w-full pr-8 appearance-none"
                         >
                           <option value="">-- Seleziona tipo pratica --</option>

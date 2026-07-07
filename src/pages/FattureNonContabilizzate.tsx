@@ -16,7 +16,7 @@ interface FormData {
 export const FattureNonContabilizzate: React.FC = () => {
   const [fatture, setFatture] = useState<FatturaNonContabilizzata[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtroProprietario, setFiltroProprietario] = useState('');
+
   const [filtroMese, setFiltroMese] = useState('');
   const [filtroAnno, setFiltroAnno] = useState(new Date().getFullYear().toString());
   const [showModal, setShowModal] = useState(false);
@@ -81,11 +81,6 @@ export const FattureNonContabilizzate: React.FC = () => {
         .eq('user_id', user?.id);
 
       // Applica filtri
-      if (filtroProprietario) {
-        countQuery = countQuery.ilike('nome', `%${filtroProprietario}%`);
-        dataQuery = dataQuery.ilike('nome', `%${filtroProprietario}%`);
-      }
-
       if (filtroMese && filtroAnno) {
         const startDate = new Date(parseInt(filtroAnno), mesi.indexOf(filtroMese), 1);
         const endDate = new Date(parseInt(filtroAnno), mesi.indexOf(filtroMese) + 1, 0);
@@ -168,7 +163,6 @@ export const FattureNonContabilizzate: React.FC = () => {
   };
 
   const handleReset = () => {
-    setFiltroProprietario('');
     setFiltroMese('');
     setFiltroAnno('');
     setCurrentPage(1);
@@ -330,11 +324,6 @@ export const FattureNonContabilizzate: React.FC = () => {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('it-IT');
-  };
-
   const totalPages = Math.ceil(totalRecords / recordsPerPage);
 
   return (
@@ -356,21 +345,7 @@ export const FattureNonContabilizzate: React.FC = () => {
 
       {/* Filtri */}
       <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-          {/* Filtro Proprietà */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Filtra per Proprietà
-            </label>
-            <input
-              type="text"
-              value={filtroProprietario}
-              onChange={(e) => setFiltroProprietario(e.target.value)}
-              placeholder="Proprietà fattura"
-              className="input"
-            />
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           {/* Filtro Mese */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -477,9 +452,9 @@ export const FattureNonContabilizzate: React.FC = () => {
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Data Emissione
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Mese
+                  </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Totale (€)
                 </th>
@@ -560,7 +535,7 @@ export const FattureNonContabilizzate: React.FC = () => {
                         )}
                         <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                            {formatDate(fattura.data_emissione)}
+                            {m || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600 dark:text-blue-400">
                             {formatCurrency(fattura.totale)}
@@ -591,20 +566,20 @@ export const FattureNonContabilizzate: React.FC = () => {
                           </td>
                         </tr>
                         {isLastInMonth && (
-                          <tr className="bg-blue-50 dark:bg-gray-600 border-t border-gray-300 dark:border-gray-500">
-                            <td className="px-6 py-3 text-sm font-bold text-gray-900 dark:text-white">
+                          <tr className="bg-ink-100 border-t border-ink-300">
+                            <td className="px-6 py-3 text-sm font-bold text-ink-900">
                               Totale {m} {a}
                             </td>
-                            <td className="px-6 py-3 text-sm font-bold text-gray-900 dark:text-gray-100">
+                            <td className="px-6 py-3 text-sm font-bold text-ink-900">
                               {formatCurrency(mTotals.totale)}
                             </td>
-                            <td className="px-6 py-3 text-sm font-bold text-gray-900 dark:text-gray-100">
+                            <td className="px-6 py-3 text-sm font-bold text-ink-900">
                               {formatCurrency(mTotals.spese)}
                             </td>
-                            <td className="px-6 py-3 text-sm font-bold text-gray-900 dark:text-gray-100">
+                            <td className="px-6 py-3 text-sm font-bold text-ink-900">
                               {formatCurrency(mTotals.netProfit)}
                             </td>
-                            <td className="px-6 py-3 text-xs text-gray-900 dark:text-gray-100">
+                            <td className="px-6 py-3 text-xs text-ink-600">
                               {mTotals.count} {mTotals.count === 1 ? 'fattura' : 'fatture'}
                             </td>
                           </tr>
@@ -618,18 +593,18 @@ export const FattureNonContabilizzate: React.FC = () => {
             </tbody>
             {/* Totalizzatore */}
             {fatture.length > 0 && (
-              <tfoot className="bg-gray-100 dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-600">
+              <tfoot className="bg-ink-200 border-t-2 border-ink-300">
                 <tr>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-gray-100">
+                  <td className="px-6 py-4 text-sm font-bold text-ink-900">
                     TOTALI
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold text-blue-700 dark:text-blue-400">
+                  <td className="px-6 py-4 text-sm font-bold text-ink-900">
                     {formatCurrency(totals.totale)}
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold text-red-700 dark:text-red-400">
+                  <td className="px-6 py-4 text-sm font-bold text-ink-900">
                     {formatCurrency(totals.spese)}
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold text-green-700 dark:text-green-400">
+                  <td className="px-6 py-4 text-sm font-bold text-ink-900">
                     {formatCurrency(totals.netProfit)}
                   </td>
                   <td className="px-6 py-4"></td>

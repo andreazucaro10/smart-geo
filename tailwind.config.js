@@ -216,7 +216,7 @@ export default {
         'content': '1200px',
       },
       width: {
-        'sidebar': '240px',
+        'sidebar': '270px',
         'sidebar-collapsed': '64px',
         'topbar': '48px',
       },

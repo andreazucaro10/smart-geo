@@ -67,7 +67,7 @@ const menuItems: MenuItem[] = [
     category: 'strumenti'
   },
   {
-    label: 'Fatture non contabili',
+    label: 'Fatture non contabilizzate',
     icon: FileText,
     path: '/fatture-non-contabilizzate',
     category: 'strumenti'

@@ -48,6 +48,7 @@ interface CategoriaPlanner {
 interface TipoPratica {
   id: number;
   descrizione: string;
+  blocco_fine_lavori: number;
   created_at: string;
   updated_at: string;
 }
@@ -136,7 +137,7 @@ export const Parametri: React.FC = () => {
   const [tipiPratica, setTipiPratica] = useState<TipoPratica[]>([]);
   const [showModalTipiPratica, setShowModalTipiPratica] = useState(false);
   const [editingTipoPratica, setEditingTipoPratica] = useState<TipoPratica | null>(null);
-  const [formTipiPratica, setFormTipiPratica] = useState({ descrizione: '' });
+  const [formTipiPratica, setFormTipiPratica] = useState({ descrizione: '', blocco_fine_lavori: false });
 
   // Funzione per ottenere la prossima posizione disponibile
   const getNextOrderPosition = () => {
@@ -776,7 +777,8 @@ export const Parametri: React.FC = () => {
 
     try {
       const dataToSave = {
-        descrizione: formTipiPratica.descrizione.trim()
+        descrizione: formTipiPratica.descrizione.trim(),
+        blocco_fine_lavori: formTipiPratica.blocco_fine_lavori ? 1 : 0
       };
 
       if (editingTipoPratica) {
@@ -1155,11 +1157,12 @@ export const Parametri: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+            <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">ID</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Descrizione</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Blocco Fine Lavori</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data creazione</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ultima modifica</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Azioni</th>
@@ -1170,6 +1173,9 @@ export const Parametri: React.FC = () => {
                 <tr key={tipo.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{tipo.id}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{tipo.descrizione}</td>
+                  <td className="px-4 py-3 text-center">
+                    {tipo.blocco_fine_lavori ? <Check className="w-4 h-4 text-green-600 dark:text-green-400 mx-auto" /> : <X className="w-4 h-4 text-gray-400 dark:text-gray-500 mx-auto" />}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                     {new Date(tipo.created_at).toLocaleDateString('it-IT')}
                   </td>
@@ -1181,7 +1187,7 @@ export const Parametri: React.FC = () => {
                       <button
                         onClick={() => {
                           setEditingTipoPratica(tipo);
-                          setFormTipiPratica({ descrizione: tipo.descrizione });
+                          setFormTipiPratica({ descrizione: tipo.descrizione, blocco_fine_lavori: tipo.blocco_fine_lavori === 1 });
                           setShowModalTipiPratica(true);
                         }}
                         className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"
@@ -2046,7 +2052,7 @@ export const Parametri: React.FC = () => {
                 onClick={() => {
                   setShowModalTipiPratica(false);
                   setEditingTipoPratica(null);
-                  setFormTipiPratica({ descrizione: '' });
+                  setFormTipiPratica({ descrizione: '', blocco_fine_lavori: false });
                 }}
                 className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
@@ -2064,13 +2070,24 @@ export const Parametri: React.FC = () => {
                   placeholder="Descrizione tipo pratica"
                 />
               </div>
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formTipiPratica.blocco_fine_lavori === true}
+                    onChange={(e) => setFormTipiPratica(prev => ({ ...prev, blocco_fine_lavori: e.target.checked }))}
+                    className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded focus:ring-blue-500 dark:focus:ring-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Blocco Fine Lavori</span>
+                </label>
+              </div>
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => {
                   setShowModalTipiPratica(false);
                   setEditingTipoPratica(null);
-                  setFormTipiPratica({ descrizione: '' });
+                  setFormTipiPratica({ descrizione: '', blocco_fine_lavori: false });
                 }}
                 className="btn btn-outline dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
               >
