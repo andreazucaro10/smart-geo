@@ -230,22 +230,6 @@ CREATE TABLE fatture (
 ALTER TABLE fatture ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage own fatture" ON fatture FOR ALL USING (auth.uid() = user_id);
 
--- Fatture non contabilizzate
-CREATE TABLE fatture_non_contabilizzate (
-  id SERIAL PRIMARY KEY,
-  user_id UUID REFERENCES auth.users DEFAULT auth.uid(),
-  nome VARCHAR(255) NOT NULL,
-  totale DECIMAL(10,2) DEFAULT 0,
-  spese DECIMAL(10,2) DEFAULT 0,
-  note TEXT,
-  data_emissione DATE,
-  data_creazione TIMESTAMP DEFAULT NOW(),
-  data_modifica TIMESTAMP DEFAULT NOW()
-);
-
-ALTER TABLE fatture_non_contabilizzate ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage own fatture_non_contabilizzate" ON fatture_non_contabilizzate FOR ALL USING (auth.uid() = user_id);
-
 -- Parametri fatturazione
 CREATE TABLE parametri_fatturazione (
   id SERIAL PRIMARY KEY,
@@ -404,7 +388,6 @@ ALTER TABLE parametri_fatturazione ENABLE ROW LEVEL SECURITY;
 
 -- Verifica le altre tabelle principali
 ALTER TABLE fatture ENABLE ROW LEVEL SECURITY;
-ALTER TABLE fatture_non_contabilizzate ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comune_catasto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ape ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scadenze ENABLE ROW LEVEL SECURITY;

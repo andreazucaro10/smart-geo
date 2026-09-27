@@ -7,7 +7,6 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Contabilita } from './pages/Contabilita';
-import { FattureNonContabilizzate } from './pages/FattureNonContabilizzate';
 import { Spese } from './pages/Spese';
 import { ComuneCatastoPage } from './pages/ComuneCatasto';
 import { ApePage } from './pages/Ape';
@@ -46,7 +45,6 @@ function App() {
             {/* Route pagine */}
             <Route path="planner" element={<Planner />} />
             <Route path="contabilita" element={<Contabilita />} />
-            <Route path="fatture-non-contabilizzate" element={<FattureNonContabilizzate />} />
             <Route path="spese" element={<Spese />} />
             <Route path="comune-catasto" element={<ComuneCatastoPage />} />
             <Route path="ape" element={<ApePage />} />

@@ -262,18 +262,6 @@ export const ApePage: React.FC = () => {
     }
   };
 
-  // Funzione per combinare i telefoni
-  const combineTelefoni = (telefono1: string | null | undefined, telefono2: string | null | undefined): string => {
-    const formatted1 = telefono1 ? formatPhoneNumber(telefono1) : '';
-    const formatted2 = telefono2 ? formatPhoneNumber(telefono2) : '';
-    
-    if (!formatted1 && !formatted2) return '-';
-    if (!formatted2) return formatted1;
-    if (!formatted1) return formatted2;
-    
-    return `${formatted1} / ${formatted2}`;
-  };
-
   // Funzione per combinare le proprietà
   const combineProprieta = (proprieta1: string | null | undefined, proprieta2: string | null | undefined): string => {
     if (!proprieta1 && !proprieta2) return '-';
@@ -759,8 +747,6 @@ export const ApePage: React.FC = () => {
               });
               setTotalRecords(prev => prev + 1);
               toast.success('Nuova pratica APE aggiunta');
-              // Refresh available years in case a new year was added
-              fetchAvailableYears();
             }
           }
           else if (payload.eventType === 'UPDATE') {
@@ -792,8 +778,6 @@ export const ApePage: React.FC = () => {
                 const newStato = stati.find(s => s.id === updatedRecord.registrazione)?.descrizione || 'N/A';
                 toast.success(`Stato cambiato da "${oldStato}" a "${newStato}"`);
               }
-              // Refresh available years in case created_at was updated (though unlikely)
-              fetchAvailableYears();
             }
           }
           else if (payload.eventType === 'DELETE') {
@@ -1006,38 +990,6 @@ export const ApePage: React.FC = () => {
     }
   };
 
-  const handleToggleOmaggio = async (pratica: Ape) => {
-    try {
-      const nuovoOmaggio = !pratica.omaggio;
-
-      const { error } = await supabase
-        .from('ape')
-        .update({
-          omaggio: nuovoOmaggio,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', pratica.id)
-        .eq('user_id', user?.id);
-
-      if (error) {
-        console.error('Errore aggiornamento omaggio:', error);
-        toast.error("Errore nell'aggiornamento dell'omaggio");
-        return;
-      }
-
-      setPratiche(prev =>
-        prev.map(p =>
-          p.id === pratica.id ? { ...p, omaggio: nuovoOmaggio } : p
-        )
-      );
-
-      toast.success(nuovoOmaggio ? 'Omaggio marcato come consegnato' : 'Omaggio marcato come non consegnato');
-    } catch (error) {
-      console.error('Errore:', error);
-      toast.error("Errore nell'aggiornamento");
-    }
-  };
-
   const handleDeletePratica = async (id: number) => {
     if (!confirm('Sei sicuro di voler eliminare questa pratica APE?')) {
       return;
@@ -1096,10 +1048,6 @@ export const ApePage: React.FC = () => {
         )}
       </div>
     );
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('it-IT');
   };
 
   return (

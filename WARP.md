@@ -115,7 +115,6 @@ All routes except `/login` are wrapped in a `ProtectedRoute` component that:
 
 #### Accounting
 - `fatture` - Invoices with automatic calculations
-- `fatture_non_contabilizzate` - Non-accounted invoices
 - `scadenze` - Payment deadlines and expenses
 - `parametri_fatturazione` - Billing parameters by year
 

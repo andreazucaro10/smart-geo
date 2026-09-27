@@ -179,17 +179,6 @@ export interface Fattura {
   data_modifica: string;
 }
 
-export interface FatturaNonContabilizzata {
-  id: number;
-  nome: string;
-  totale: number;
-  spese: number;
-  note?: string;
-  data_emissione?: string;
-  data_creazione: string;
-  data_modifica: string;
-}
-
 export interface ParametroFatturazione {
   id: number;
   anno: number;

@@ -242,18 +242,6 @@ CREATE TABLE fatture (
   data_modifica TIMESTAMP DEFAULT NOW()
 );
 
--- Fatture non contabilizzate
-CREATE TABLE fatture_non_contabilizzate (
-  id SERIAL PRIMARY KEY,
-  nome VARCHAR(255) NOT NULL,
-  totale DECIMAL(10,2) DEFAULT 0,
-  spese DECIMAL(10,2) DEFAULT 0,
-  note TEXT,
-  data_emissione DATE,
-  data_creazione TIMESTAMP DEFAULT NOW(),
-  data_modifica TIMESTAMP DEFAULT NOW()
-);
-
 -- Parametri fatturazione
 CREATE TABLE parametri_fatturazione (
   id SERIAL PRIMARY KEY,

@@ -77,7 +77,6 @@ const [columnFilters, setColumnFilters] = useState<{
     acconto: 'all',
     saldo: 'all'
   });
-  const [filtriAttivi, setFiltriAttivi] = useState<Record<string, boolean>>({});
   const [presetFilters, setPresetFilters] = useState({
     nonPagate: false,
     omaggio: false
@@ -176,7 +175,6 @@ const [columnFilters, setColumnFilters] = useState<{
 
   const fetchData = async (customFilters?: {
     columnFilters?: typeof columnFilters;
-    filtriAttivi?: typeof filtriAttivi;
     presetFilters?: typeof presetFilters;
     page?: number;
     perPage?: number;
@@ -191,7 +189,6 @@ const [columnFilters, setColumnFilters] = useState<{
       }
 
       const currentFilters = customFilters?.columnFilters ?? columnFilters;
-      const currentFiltriAttivi = customFilters?.filtriAttivi ?? filtriAttivi;
       const currentPresetFilters = customFilters?.presetFilters ?? presetFilters;
       const currentPageParam = customFilters?.page ?? currentPage;
       const currentPerPage = customFilters?.perPage ?? recordsPerPage;
@@ -558,7 +555,7 @@ const [columnFilters, setColumnFilters] = useState<{
 
   const handleDuplicateVaria = async (varia: Varie) => {
     try {
-      const { id, created_at, updated_at, progressivo, ...variaData } = varia;
+      const { id, created_at, updated_at, progressivo, ...variaData } = varia as Varie & { updated_at?: string; progressivo?: string };
       
       const duplicatedData = {
         ...variaData,
@@ -684,17 +681,6 @@ const [columnFilters, setColumnFilters] = useState<{
   };
 
   // Funzione per combinare i telefoni
-  const combineTelefoni = (telefono1: string | null | undefined, telefono2: string | null | undefined): string => {
-    const formatted1 = telefono1 ? formatTelefono(telefono1) : '';
-    const formatted2 = telefono2 ? formatTelefono(telefono2) : '';
-
-    if (!formatted1 && !formatted2) return '-';
-    if (!formatted2) return formatted1;
-    if (!formatted1) return formatted2;
-
-    return `${formatted1} / ${formatted2}`;
-  };
-
   // Funzione per combinare le proprietà
   const combineProprieta = (proprieta1: string | null | undefined, proprieta2: string | null | undefined): string => {
     if (!proprieta1 && !proprieta2) return '-';

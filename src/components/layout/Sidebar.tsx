@@ -4,7 +4,6 @@ import {
   Home, 
   Calendar, 
   Calculator, 
-  FileText, 
   CreditCard,
   Building2,
   FileCheck,
@@ -64,12 +63,6 @@ const menuItems: MenuItem[] = [
     label: 'Contabilità',
     icon: Calculator,
     path: '/contabilita',
-    category: 'strumenti'
-  },
-  {
-    label: 'Fatture non contabilizzate',
-    icon: FileText,
-    path: '/fatture-non-contabilizzate',
     category: 'strumenti'
   },
   {

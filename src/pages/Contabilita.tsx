@@ -61,7 +61,6 @@ export const Contabilita: React.FC = () => {
 
   // Genera lista anni dal database (solo anni con fatture)
  const [anni, setAnni] = useState<number[]>([]);
- const currentYear = new Date().getFullYear();
 
  // Opzioni records per pagina
  const recordsPerPageOptions = [5, 10, 25, 50, 100];
@@ -427,8 +426,8 @@ export const Contabilita: React.FC = () => {
  mese: fattura.mese_fattura,
  anno: fattura.anno_fattura || new Date().getFullYear(),
  numeroFattura: fattura.numero_fattura || '',
- onorario: fattura.onorario ?? '',
- spese: fattura.spese ?? '',
+ onorario: fattura.onorario?.toString() ?? '',
+ spese: fattura.spese?.toString() ?? '',
  bolli: fattura.bolli,
  cassaGeometri: fattura.cassa_geometri,
  tasse: fattura.tasse,

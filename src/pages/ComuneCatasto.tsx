@@ -739,17 +739,6 @@ export const ComuneCatastoPage: React.FC = () => {
     }
   };
 
-  const combineTelefoni = (telefono1: string | null | undefined, telefono2: string | null | undefined): string => {
-    const formatted1 = telefono1 ? formatTelefono(telefono1) : '';
-    const formatted2 = telefono2 ? formatTelefono(telefono2) : '';
-
-    if (!formatted1 && !formatted2) return '-';
-    if (!formatted2) return formatted1;
-    if (!formatted1) return formatted2;
-
-    return `${formatted1} / ${formatted2}`;
-  };
-
   const combineProprieta = (proprieta1: string | null | undefined, proprieta2: string | null | undefined): string => {
     if (!proprieta1 && !proprieta2) return '-';
     if (!proprieta2) return proprieta1 || '-';
@@ -802,8 +791,18 @@ export const ComuneCatastoPage: React.FC = () => {
 
   const handleDuplicatePratica = async (pratica: ComuneCatasto) => {
     try {
-      const { id, created_at, updated_at, progressivo, ...praticaData } = pratica;
-      
+      // Esclude id, timestamp, progressivo e campi joined (non sono colonne di comune_catasto)
+      const {
+        id: _id,
+        created_at: _createdAt,
+        updated_at: _updatedAt,
+        progressivo: _progressivo,
+        stato_info: _statoInfo,
+        tipo_incarico_info: _tipoIncaricoInfo,
+        tipo_pratica_info: _tipoPraticaInfo,
+        ...praticaData
+      } = pratica as ComuneCatasto & { progressivo?: string };
+
       const duplicatedData = {
         ...praticaData,
         committente: `${praticaData.committente}`,
@@ -865,6 +864,11 @@ export const ComuneCatastoPage: React.FC = () => {
 
     if (!formData.committente.trim()) {
       toast.error('Il campo committente è obbligatorio');
+      return;
+    }
+
+    if (!formData.tipo_pratica) {
+      toast.error('Il campo tipo pratica è obbligatorio');
       return;
     }
 
@@ -1997,13 +2001,14 @@ export const ComuneCatastoPage: React.FC = () => {
 
                     <div>
                       <label className="block text-xs font-medium text-ink-500 uppercase tracking-wider mb-1">
-                        Tipo Pratica
+                        Tipo Pratica *
                       </label>
                       <div className="relative">
                         <select
                           name="tipo_pratica"
                           value={formData.tipo_pratica}
                           onChange={handleTipoPraticaChange}
+                          required
                           className="input w-full pr-8 appearance-none"
                         >
                           <option value="">-- Seleziona tipo pratica --</option>

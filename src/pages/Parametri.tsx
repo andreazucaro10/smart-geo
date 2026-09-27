@@ -571,7 +571,7 @@ export const Parametri: React.FC = () => {
 
       setShowModalStatiApe(false);
       setEditingStatoApe(null);
-      setFormStatiApe({ descrizione: '', colore: '#10b981', ordinamento: 0 });
+      setFormStatiApe({ descrizione: '', colore: '#10b981', ordinamento: 0, filtro_non_pagata: 0 });
       loadStatiApe();
     } catch (error) {
       console.error('Errore:', error);
@@ -647,7 +647,7 @@ export const Parametri: React.FC = () => {
 
       setShowModalStatiGenerali(false);
       setEditingStatoGenerale(null);
-      setFormStatiGenerali({ descrizione: '', colore: '#6366f1', ordinamento: 0 });
+      setFormStatiGenerali({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
       loadStatiGenerali();
     } catch (error) {
       console.error('Errore:', error);
@@ -800,7 +800,7 @@ export const Parametri: React.FC = () => {
 
       setShowModalTipiPratica(false);
       setEditingTipoPratica(null);
-      setFormTipiPratica({ descrizione: '' });
+      setFormTipiPratica({ descrizione: '', blocco_fine_lavori: false });
       loadTipiPratica();
     } catch (error) {
       console.error('Errore:', error);
@@ -1187,7 +1187,7 @@ export const Parametri: React.FC = () => {
                       <button
                         onClick={() => {
                           setEditingTipoPratica(tipo);
-                          setFormTipiPratica({ descrizione: tipo.descrizione, blocco_fine_lavori: tipo.blocco_fine_lavori === 1 });
+                          setFormTipiPratica({ descrizione: tipo.descrizione, blocco_fine_lavori: !!tipo.blocco_fine_lavori });
                           setShowModalTipiPratica(true);
                         }}
                         className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors p-1"

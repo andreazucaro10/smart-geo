@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { Edit, Copy, Archive, Trash2, Eye, Download, CreditCard } from 'lucide-react';
 
 interface ContextMenuProps {

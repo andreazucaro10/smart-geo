@@ -2,21 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
-  FileCheck,
-  FolderOpen,
   AlertTriangle,
   TrendingUp,
   TrendingDown,
   Euro,
   Calendar,
-  Users,
   Plus,
   UserPlus,
   FileText
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
-import type { Scadenza, ComuneCatasto } from '../types';
 
 // KPI Card Component
 interface KpiCardProps {
@@ -97,7 +93,7 @@ const QuickAction: React.FC<QuickActionProps> = ({ label, icon: Icon, shortcut, 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [stats, setStats] = useState({
     pratiche_aperte: 0,
     scadenze_imminenti: 0,

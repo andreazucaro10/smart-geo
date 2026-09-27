@@ -16,7 +16,6 @@ const pageTitles: Record<string, string> = {
   '/ape': 'APE',
   '/varie': 'Varie',
   '/contabilita': 'Contabilità',
-  '/fatture-non-contabilizzate': 'Fatture non contabili',
   '/spese': 'Spese',
   '/rubrica': 'Rubrica',
   '/parametri': 'Parametri',

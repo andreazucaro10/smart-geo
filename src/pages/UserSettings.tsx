@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faSignature, faLock, faKey, faUnlockAlt, faCheck, faSave } from '@fortawesome/free-solid-svg-icons';
+import { faLock, faKey, faUnlockAlt, faCheck, faSave } from '@fortawesome/free-solid-svg-icons';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../services/supabase';
-import { useNavigate } from 'react-router-dom';
 
 export const UserSettings: React.FC = () => {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
   
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
