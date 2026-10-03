@@ -272,7 +272,8 @@ const [columnFilters, setColumnFilters] = useState<{
           registrazione_info:stati_generali(id, descrizione, colore)
         `)
         .eq('user_id', user?.id)
-        .order('registrazione', { ascending: true });
+        .order('registrazione', { ascending: true })
+        .order('created_at', { ascending: false });
 
       if (searchParts.length > 0) {
         query = query.or(searchParts.join(','));
