@@ -30,6 +30,16 @@ export interface StatoGenerale {
   updated_at: string;
 }
 
+export interface StatoVarie {
+  id: number;
+  descrizione: string;
+  colore: string;
+  ordinamento: number;
+  filtro_non_pagata: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface StatoApe {
   id: number;
   descrizione: string;
@@ -133,7 +143,7 @@ export interface Varie {
   omaggio: boolean;
   created_at: string;
   // Joined fields
-  registrazione_info?: StatoGenerale;
+  registrazione_info?: StatoVarie;
 }
 
 export interface Rubrica {

@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { RubricaAutocomplete } from '../components/RubricaAutocomplete';
 import { syncRubricaFromPratica } from '../utils/rubricaSync';
 import { ContextMenu } from '../components/ContextMenu';
-import type { Varie, StatoGenerale, TipoIncarico, Rubrica } from '../types';
+import type { Varie, StatoVarie, TipoIncarico, Rubrica } from '../types';
 import toast from 'react-hot-toast';
 
 const TriStateFilter = ({ value, onChange }: {
@@ -51,7 +51,7 @@ const TriStateFilter = ({ value, onChange }: {
 
 export const VariePage: React.FC = () => {
   const [varie, setVarie] = useState<Varie[]>([]);
-  const [stati, setStati] = useState<StatoGenerale[]>([]);
+  const [stati, setStati] = useState<StatoVarie[]>([]);
   const [tipiIncarico, setTipiIncarico] = useState<TipoIncarico[]>([]);
   const [loading, setLoading] = useState(true);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
@@ -244,7 +244,7 @@ const [columnFilters, setColumnFilters] = useState<{
 
       if (currentPresetFilters.nonPagate) {
         const { data: statiNonPagata } = await supabase
-          .from('stati_generali')
+          .from('stati_varie')
           .select('id')
           .eq('filtro_non_pagata', 1);
         const ids = (statiNonPagata || []).map(s => s.id);
@@ -269,7 +269,7 @@ const [columnFilters, setColumnFilters] = useState<{
         .from('varie')
         .select(`
           *,
-          registrazione_info:stati_generali(id, descrizione, colore)
+          registrazione_info:stati_varie(id, descrizione, colore)
         `)
         .eq('user_id', user?.id)
         .order('registrazione', { ascending: true })
@@ -301,7 +301,7 @@ const [columnFilters, setColumnFilters] = useState<{
 
       if (currentPresetFilters.nonPagate) {
         const { data: statiNonPagata } = await supabase
-          .from('stati_generali')
+          .from('stati_varie')
           .select('id')
           .eq('filtro_non_pagata', 1);
         const ids = (statiNonPagata || []).map(s => s.id);
@@ -328,7 +328,7 @@ const [columnFilters, setColumnFilters] = useState<{
       }
 
       const { data: statiData, error: statiError } = await supabase
-        .from('stati_generali')
+        .from('stati_varie')
         .select('*')
         .order('ordinamento');
 
@@ -403,7 +403,7 @@ const [columnFilters, setColumnFilters] = useState<{
               .from('varie')
               .select(`
                 *,
-                registrazione_info:stati_generali(id, descrizione, colore)
+                registrazione_info:stati_varie(id, descrizione, colore)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -424,7 +424,7 @@ const [columnFilters, setColumnFilters] = useState<{
               .from('varie')
               .select(`
                 *,
-                registrazione_info:stati_generali(id, descrizione, colore)
+                registrazione_info:stati_varie(id, descrizione, colore)
               `)
               .eq('id', payload.new.id)
               .single();
@@ -893,12 +893,12 @@ const [columnFilters, setColumnFilters] = useState<{
     }));
   };
 
-  const getStatoStyle = (stato: StatoGenerale | undefined) => {
+  const getStatoStyle = (stato: StatoVarie | undefined) => {
     if (!stato || !stato.colore) return 'bg-ink-100 text-ink-800';
     return 'text-white';
   };
 
-  const getStatoBackgroundColor = (stato: StatoGenerale | undefined) => {
+  const getStatoBackgroundColor = (stato: StatoVarie | undefined) => {
     if (!stato || !stato.colore) return '#6b7280';
     return stato.colore;
   };

@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, Check, X, Building, Calculator, Briefcase, Calendar
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
+import type { StatoVarie } from '../types';
 
 interface DatiAzienda {
   id?: number;
@@ -127,6 +128,12 @@ export const Parametri: React.FC = () => {
   const [editingStatoGenerale, setEditingStatoGenerale] = useState<StatoGenerale | null>(null);
   const [formStatiGenerali, setFormStatiGenerali] = useState({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
 
+  // Stati per Stati Varie
+  const [statiVarie, setStatiVarie] = useState<StatoVarie[]>([]);
+  const [showModalStatiVarie, setShowModalStatiVarie] = useState(false);
+  const [editingStatoVarie, setEditingStatoVarie] = useState<StatoVarie | null>(null);
+  const [formStatiVarie, setFormStatiVarie] = useState({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
+
   // Stati per Stati Scadenze
   const [statiScadenze, setStatiScadenze] = useState<StatoScadenza[]>([]);
   const [showModalStatiScadenze, setShowModalStatiScadenze] = useState(false);
@@ -181,6 +188,7 @@ export const Parametri: React.FC = () => {
       loadCategoriePlanner(),
       loadStatiApe(),
       loadStatiGenerali(),
+      loadStatiVarie(),
       loadStatiScadenze(),
       loadTipiPratica()
     ]);
@@ -671,6 +679,86 @@ export const Parametri: React.FC = () => {
     } catch (error) {
       console.error('Errore:', error);
       toast.error('Errore nell\'eliminazione dello stato generale');
+    }
+  };
+
+  // === STATI VARIE ===
+  const loadStatiVarie = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stati_varie')
+        .select('*')
+        .order('ordinamento', { ascending: true });
+
+      if (error) throw error;
+      setStatiVarie(data || []);
+    } catch (error) {
+      console.error('Errore caricamento stati varie:', error);
+      toast.error('Errore nel caricamento degli stati varie');
+    }
+  };
+
+  const saveStatoVarie = async () => {
+    if (!formStatiVarie.descrizione.trim()) {
+      toast.error('La descrizione è obbligatoria');
+      return;
+    }
+
+    try {
+      const dataToSave = {
+        descrizione: formStatiVarie.descrizione.trim(),
+        colore: formStatiVarie.colore,
+        ordinamento: formStatiVarie.ordinamento,
+        filtro_non_pagata: formStatiVarie.filtro_non_pagata
+      };
+
+      if (editingStatoVarie) {
+        const { error } = await supabase
+          .from('stati_varie')
+          .update(dataToSave)
+          .eq('id', editingStatoVarie.id);
+
+        if (error) throw error;
+        toast.success('Stato varie modificato con successo');
+      } else {
+        const { error } = await supabase
+          .from('stati_varie')
+          .insert([dataToSave]);
+
+        if (error) throw error;
+        toast.success('Stato varie creato con successo');
+      }
+
+      setShowModalStatiVarie(false);
+      setEditingStatoVarie(null);
+      setFormStatiVarie({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
+      loadStatiVarie();
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nel salvataggio dello stato varie');
+    }
+  };
+
+  const deleteStatoVarie = async (id: number) => {
+    if (!confirm('Sei sicuro di voler eliminare questo stato varie?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('stati_varie')
+        .delete()
+        .eq('id', id);
+
+      if (error?.code === '23503') {
+        toast.error('Impossibile eliminare uno stato utilizzato da una pratica varie');
+        return;
+      }
+      if (error) throw error;
+
+      loadStatiVarie();
+      toast.success('Stato varie eliminato con successo');
+    } catch (error) {
+      console.error('Errore:', error);
+      toast.error('Errore nell\'eliminazione dello stato varie');
     }
   };
 
@@ -1476,6 +1564,95 @@ export const Parametri: React.FC = () => {
         </div>
       </div>
 
+      {/* Stati Varie */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Settings className="w-6 h-6 text-signal-500" />
+            <div>
+              <h2 className="text-xl font-bold text-ink-800">Stati Varie</h2>
+              <p className="text-sm text-ink-600">Gestione stati delle pratiche varie</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setEditingStatoVarie(null);
+              setFormStatiVarie({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
+              setShowModalStatiVarie(true);
+            }}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Nuovo Stato Varie
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-ink-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Ordinamento</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Descrizione</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Colore</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-ink-500 uppercase">Filtro Non Pagata</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Data creazione</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-ink-500 uppercase">Ultima modifica</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-ink-500 uppercase">Azioni</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-200 bg-white">
+              {statiVarie.map((stato) => (
+                <tr key={stato.id} className="hover:bg-ink-50">
+                  <td className="px-4 py-3 text-sm text-ink-800">{stato.id}</td>
+                  <td className="px-4 py-3 text-sm text-ink-800">{stato.ordinamento}</td>
+                  <td className="px-4 py-3 text-sm text-ink-800">{stato.descrizione}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-4 h-4 rounded-full border border-ink-300"
+                        style={{ backgroundColor: stato.colore }}
+                      ></div>
+                      <span className="text-sm text-ink-800">{stato.colore}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {stato.filtro_non_pagata ? <Check className="w-4 h-4 text-topo-500 mx-auto" /> : <X className="w-4 h-4 text-ink-400 mx-auto" />}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-ink-800">
+                    {new Date(stato.created_at).toLocaleDateString('it-IT')}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-ink-800">
+                    {new Date(stato.updated_at).toLocaleDateString('it-IT')}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingStatoVarie(stato);
+                          setFormStatiVarie({ descrizione: stato.descrizione, colore: stato.colore, ordinamento: stato.ordinamento, filtro_non_pagata: stato.filtro_non_pagata });
+                          setShowModalStatiVarie(true);
+                        }}
+                        className="text-signal-500 hover:text-signal-700 transition-colors p-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        title="Elimina stato varie"
+                        onClick={() => deleteStatoVarie(stato.id)}
+                        className="text-error-500 hover:text-error-700 transition-colors p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Stati Spese */}
       <div className="card dark:bg-gray-800 dark:border-gray-700">
         <div className="flex items-center justify-between mb-6">
@@ -1972,6 +2149,89 @@ export const Parametri: React.FC = () => {
                 className="btn btn-primary"
               >
                 {editingStatoGenerale ? 'Modifica' : 'Salva'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Stati Varie */}
+      {showModalStatiVarie && (
+        <div className="modal-overlay">
+          <div className="bg-white rounded-lg w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-ink-200">
+              <h3 className="text-lg font-bold text-ink-800">
+                {editingStatoVarie ? 'Modifica Stato Varie' : 'Nuovo Stato Varie'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowModalStatiVarie(false);
+                  setEditingStatoVarie(null);
+                  setFormStatiVarie({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
+                }}
+                className="text-ink-400 hover:text-ink-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Ordinamento</label>
+                <input
+                  type="number"
+                  value={formStatiVarie.ordinamento}
+                  onChange={(e) => setFormStatiVarie(prev => ({ ...prev, ordinamento: parseInt(e.target.value) || 0 }))}
+                  className="input w-full"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Descrizione</label>
+                <input
+                  type="text"
+                  value={formStatiVarie.descrizione}
+                  onChange={(e) => setFormStatiVarie(prev => ({ ...prev, descrizione: e.target.value }))}
+                  className="input w-full"
+                  placeholder="Descrizione stato varie"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Colore</label>
+                <input
+                  type="color"
+                  value={formStatiVarie.colore}
+                  onChange={(e) => setFormStatiVarie(prev => ({ ...prev, colore: e.target.value }))}
+                  className="w-full h-10 rounded border border-ink-300"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formStatiVarie.filtro_non_pagata)}
+                    onChange={(e) => setFormStatiVarie(prev => ({ ...prev, filtro_non_pagata: e.target.checked ? 1 : 0 }))}
+                    className="w-4 h-4 text-signal-500 border-ink-300 rounded focus:ring-signal-500"
+                  />
+                  <span className="text-sm font-medium text-ink-700">Filtro Non Pagata</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-ink-200">
+              <button
+                onClick={() => {
+                  setShowModalStatiVarie(false);
+                  setEditingStatoVarie(null);
+                  setFormStatiVarie({ descrizione: '', colore: '#6366f1', ordinamento: 0, filtro_non_pagata: 0 });
+                }}
+                className="btn btn-outline"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={saveStatoVarie}
+                className="btn btn-primary"
+              >
+                {editingStatoVarie ? 'Modifica' : 'Salva'}
               </button>
             </div>
           </div>
